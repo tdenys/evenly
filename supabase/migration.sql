@@ -187,3 +187,9 @@ create policy "delete couple envelopes" on envelopes
   for delete to authenticated using (couple_id = auth_couple_id());
 
 grant select, insert, update, delete on envelopes to authenticated;
+
+-- ============================================================
+-- V2 — Sous-enveloppes récursives
+-- ============================================================
+
+alter table envelopes add column parent_id uuid references envelopes(id) on delete cascade;

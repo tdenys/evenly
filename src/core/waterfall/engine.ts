@@ -1,16 +1,4 @@
-import type {
-  Amount,
-  Condition,
-  Envelope,
-  EnvelopeResult,
-  GoalsState,
-  Income,
-  PotsState,
-  Rule,
-  RuleAllocation,
-  WaterfallInput,
-  WaterfallResult,
-} from './types';
+import type { Amount, Envelope, EnvelopeResult, Income, WaterfallInput, WaterfallResult } from './types';
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
 const clamp = (value: number, poolRemaining: number) => Math.min(Math.max(value, 0), Math.max(poolRemaining, 0));
@@ -29,90 +17,50 @@ function resolveAmount(amount: Amount, pool: Pool): number {
     case 'percent_remaining':
       return round2(clamp((amount.pct / 100) * pool.poolRemaining, pool.poolRemaining));
     case 'prorata_income':
-      return round2(clamp(pool.poolRemaining, pool.poolRemaining));
+      // Résolu dans runSiblings (a besoin de `income` et d'une base figée entre sœurs) —
+      // ne devrait jamais être appelé ici.
+      throw new Error('prorata_income must be resolved by runSiblings');
   }
 }
 
-interface ConditionContext {
-  goals?: GoalsState;
-  pots?: PotsState;
-  today: string;
-}
-
-function isSkipped(condition: Condition | undefined, ctx: ConditionContext): boolean {
-  if (!condition) return false;
-  switch (condition.type) {
-    case 'skip_if_goal_reached': {
-      const goal = ctx.goals?.[condition.goalId];
-      return goal !== undefined && goal.current >= goal.target;
-    }
-    case 'skip_if_pot_above': {
-      const pot = ctx.pots?.[condition.potId];
-      return pot !== undefined && pot > condition.threshold;
-    }
-    case 'active_from_date':
-      return ctx.today < condition.date;
-  }
-}
-
-function splitProrata(amount: number, income: Income): { a: number; b: number } {
+function incomeShare(who: 'A' | 'B', income: Income): number {
   const total = income.a + income.b;
-  if (total <= 0) {
-    const half = round2(amount / 2);
-    return { a: half, b: round2(amount - half) };
-  }
-  const a = round2(amount * (income.a / total));
-  return { a, b: round2(amount - a) };
+  if (total <= 0) return 0.5;
+  return (who === 'A' ? income.a : income.b) / total;
 }
 
 function byPriority<T extends { priority: number }>(items: T[]): T[] {
   return [...items].sort((x, y) => x.priority - y.priority);
 }
 
-function runRule(rule: Rule, envelopeId: string, pool: Pool, income: Income, ctx: ConditionContext): RuleAllocation {
-  const skipped = isSkipped(rule.condition, ctx);
-  const amount = skipped ? 0 : resolveAmount(rule.amount, pool);
-  const split = !skipped && rule.recipient.type === 'prorata' ? splitProrata(amount, income) : undefined;
+// Des enveloppes sœurs consécutives (par priorité) de type `prorata_income` se partagent le
+// pool restant tel qu'il était AU DÉBUT du groupe, pas un reste qui diminue entre elles —
+// sinon la 2e personne recevrait moins que sa vraie part proportionnelle (ex: A=60%, B=40% du
+// même reste de 350€ → 210€/140€, pas 210€ puis 40% de 140€).
+function runSiblings(envelopes: Envelope[], poolAtStart: number, poolRemaining: number, income: Income): EnvelopeResult[] {
+  let remaining = poolRemaining;
+  let prorataBase: number | null = null;
 
-  return {
-    envelopeId,
-    ruleId: rule.id,
-    amount,
-    skipped,
-    recipient: rule.recipient,
-    ...(split ? { split } : {}),
-  };
-}
+  return byPriority(envelopes).map((envelope) => {
+    let amount: number;
+    if (envelope.allocation.type === 'prorata_income') {
+      if (prorataBase === null) prorataBase = remaining;
+      amount = round2(clamp(prorataBase * incomeShare(envelope.allocation.who, income), remaining));
+    } else {
+      prorataBase = null;
+      amount = resolveAmount(envelope.allocation, { poolAtStart, poolRemaining: remaining });
+    }
+    remaining = round2(remaining - amount);
 
-function runEnvelope(envelope: Envelope, pool: Pool, income: Income, ctx: ConditionContext): EnvelopeResult {
-  const amount = resolveAmount(envelope.allocation, pool);
-
-  let remaining = amount;
-  const ruleAllocations = byPriority(envelope.rules).map((rule) => {
-    const allocation = runRule(rule, envelope.id, { poolAtStart: amount, poolRemaining: remaining }, income, ctx);
-    remaining = round2(remaining - allocation.amount);
-    return allocation;
+    const children = runSiblings(envelope.children, amount, amount, income);
+    return { envelopeId: envelope.id, amount, children };
   });
-
-  return { envelopeId: envelope.id, amount, ruleAllocations };
 }
 
 export function runWaterfall(input: WaterfallInput): WaterfallResult {
-  const today = input.today ?? new Date().toISOString().slice(0, 10);
-  const ctx: ConditionContext = { goals: input.goals, pots: input.pots, today };
   const totalIncome = input.income.a + input.income.b;
+  const envelopeResults = runSiblings(input.envelopes, totalIncome, totalIncome, input.income);
+  const allocated = envelopeResults.reduce((sum, e) => sum + e.amount, 0);
 
-  let remainingIncome = totalIncome;
-  const envelopeResults = byPriority(input.envelopes).map((envelope) => {
-    const result = runEnvelope(
-      envelope,
-      { poolAtStart: totalIncome, poolRemaining: remainingIncome },
-      input.income,
-      ctx
-    );
-    remainingIncome = round2(remainingIncome - result.amount);
-    return result;
-  });
-
-  return { totalIncome, envelopeResults, remainingIncome };
+  return { totalIncome, envelopeResults, remainingIncome: round2(totalIncome - allocated) };
 }

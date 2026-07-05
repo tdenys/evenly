@@ -5,6 +5,8 @@ import type { Amount } from '@/core/waterfall/types';
 interface Props {
   value: Amount;
   onChange: (amount: Amount) => void;
+  /** Prénoms affichés pour le choix "prorata revenus" — A/B restent stables en interne. */
+  personLabels: { A: string; B: string };
 }
 
 type AmountType = Amount['type'];
@@ -33,11 +35,11 @@ function withType(type: AmountType, numericValue: number): Amount {
     case 'percent_remaining':
       return { type: 'percent_remaining', pct: numericValue };
     case 'prorata_income':
-      return { type: 'prorata_income' };
+      return { type: 'prorata_income', who: 'A' };
   }
 }
 
-export default function AmountEditor({ value, onChange }: Props) {
+export default function AmountEditor({ value, onChange, personLabels }: Props) {
   // Le texte brut est la source de vérité pour l'affichage (pas la valeur numérique déjà
   // parsée) pour ne pas perdre ce que l'utilisateur tape (ex: un "." en fin de saisie).
   const [text, setText] = useState(() => numericFieldValue(value));
@@ -80,6 +82,22 @@ export default function AmountEditor({ value, onChange }: Props) {
           value={text}
           onChangeText={handleTextChange}
         />
+      )}
+
+      {value.type === 'prorata_income' && (
+        <View style={styles.chips}>
+          {(['A', 'B'] as const).map((who) => (
+            <TouchableOpacity
+              key={who}
+              style={[styles.chip, value.who === who && styles.chipSelected]}
+              onPress={() => onChange({ type: 'prorata_income', who })}
+            >
+              <Text style={[styles.chipText, value.who === who && styles.chipTextSelected]}>
+                {personLabels[who]}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       )}
     </View>
   );

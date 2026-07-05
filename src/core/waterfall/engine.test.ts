@@ -1,40 +1,6 @@
 import { runWaterfall } from './engine';
 import type { Envelope } from './types';
 
-function investissementEnvelope(): Envelope {
-  return {
-    id: 'investissement',
-    label: 'Investissement',
-    emoji: '📈',
-    priority: 3,
-    allocation: { type: 'percent_envelope', pct: 20 },
-    rules: [
-      {
-        id: 'matelas',
-        label: 'Matelas sécurité',
-        priority: 1,
-        amount: { type: 'fixed', value: 300 },
-        recipient: { type: 'shared_pot', potId: 'matelas' },
-        condition: { type: 'skip_if_goal_reached', goalId: 'matelas-goal' },
-      },
-      {
-        id: 'apport',
-        label: 'Apport immobilier',
-        priority: 2,
-        amount: { type: 'percent_remaining', pct: 50 },
-        recipient: { type: 'shared_pot', potId: 'apport' },
-      },
-      {
-        id: 'pea',
-        label: 'PEA',
-        priority: 3,
-        amount: { type: 'prorata_income' },
-        recipient: { type: 'prorata' },
-      },
-    ],
-  };
-}
-
 function coupleEnvelopes(): Envelope[] {
   return [
     {
@@ -43,7 +9,7 @@ function coupleEnvelopes(): Envelope[] {
       emoji: '🏠',
       priority: 1,
       allocation: { type: 'percent_envelope', pct: 50 },
-      rules: [],
+      children: [],
     },
     {
       id: 'envies',
@@ -51,18 +17,22 @@ function coupleEnvelopes(): Envelope[] {
       emoji: '🎉',
       priority: 2,
       allocation: { type: 'percent_envelope', pct: 30 },
-      rules: [],
+      children: [],
     },
-    investissementEnvelope(),
+    {
+      id: 'investissement',
+      label: 'Investissement',
+      emoji: '📈',
+      priority: 3,
+      allocation: { type: 'percent_envelope', pct: 20 },
+      children: [],
+    },
   ];
 }
 
-describe('runWaterfall — exemples chiffrés de CLAUDE.md', () => {
+describe('runWaterfall — enveloppes de premier niveau', () => {
   it('répartit 5000€ en 2500 / 1500 / 1000 entre les enveloppes', () => {
-    const result = runWaterfall({
-      income: { a: 2500, b: 2500 },
-      envelopes: coupleEnvelopes(),
-    });
+    const result = runWaterfall({ income: { a: 2500, b: 2500 }, envelopes: coupleEnvelopes() });
 
     expect(result.totalIncome).toBe(5000);
     expect(result.remainingIncome).toBe(0);
@@ -72,93 +42,156 @@ describe('runWaterfall — exemples chiffrés de CLAUDE.md', () => {
       ['investissement', 1000],
     ]);
   });
-
-  it('cascade 300€ fixe / 50% du reste / prorata revenus dans Investissement', () => {
-    const result = runWaterfall({
-      income: { a: 2500, b: 2500 },
-      envelopes: coupleEnvelopes(),
-      goals: { 'matelas-goal': { current: 5000, target: 10000 } }, // pas encore atteint
-    });
-
-    const investissement = result.envelopeResults.find((e) => e.envelopeId === 'investissement')!;
-    expect(investissement.ruleAllocations).toEqual([
-      expect.objectContaining({ ruleId: 'matelas', amount: 300, skipped: false }),
-      expect.objectContaining({ ruleId: 'apport', amount: 350, skipped: false }),
-      expect.objectContaining({ ruleId: 'pea', amount: 350, skipped: false, split: { a: 175, b: 175 } }),
-    ]);
-  });
 });
 
-describe('runWaterfall — conditions', () => {
-  it('skip_if_goal_reached: objectif atteint => règle skip, montant laissé au suivant', () => {
-    const result = runWaterfall({
-      income: { a: 2500, b: 2500 },
-      envelopes: coupleEnvelopes(),
-      goals: { 'matelas-goal': { current: 10000, target: 10000 } }, // atteint
-    });
+describe('runWaterfall — sous-enveloppes récursives', () => {
+  it('Voyage 300€ → Japon 150€ (50%) + Camping 150€ (50%)', () => {
+    const voyage: Envelope = {
+      id: 'voyage',
+      label: 'Voyage',
+      emoji: '✈️',
+      priority: 1,
+      allocation: { type: 'fixed', value: 300 },
+      children: [
+        {
+          id: 'japon',
+          label: 'Voyage Japon',
+          emoji: '🗾',
+          priority: 1,
+          allocation: { type: 'percent_envelope', pct: 50 },
+          children: [],
+        },
+        {
+          id: 'camping',
+          label: 'Camping Normandie',
+          emoji: '⛺',
+          priority: 2,
+          allocation: { type: 'percent_envelope', pct: 50 },
+          children: [],
+        },
+      ],
+    };
 
-    const investissement = result.envelopeResults.find((e) => e.envelopeId === 'investissement')!;
-    const matelas = investissement.ruleAllocations.find((r) => r.ruleId === 'matelas')!;
-    const apport = investissement.ruleAllocations.find((r) => r.ruleId === 'apport')!;
-    expect(matelas).toMatchObject({ amount: 0, skipped: true });
-    // 50% du reste (1000€, puisque matelas n'a rien pris) = 500€
-    expect(apport).toMatchObject({ amount: 500, skipped: false });
+    const result = runWaterfall({ income: { a: 300, b: 0 }, envelopes: [voyage] });
+
+    const voyageResult = result.envelopeResults[0];
+    expect(voyageResult.amount).toBe(300);
+    expect(voyageResult.children.map((c) => [c.envelopeId, c.amount])).toEqual([
+      ['japon', 150],
+      ['camping', 150],
+    ]);
   });
 
-  it('skip_if_pot_above: pot au-dessus du seuil => règle skip', () => {
+  it('cascade fixed / percent_remaining / prorata_income (A+B) entre sous-enveloppes', () => {
+    const investissement: Envelope = {
+      id: 'investissement',
+      label: 'Investissement',
+      emoji: '📈',
+      priority: 1,
+      allocation: { type: 'fixed', value: 1000 },
+      children: [
+        {
+          id: 'matelas',
+          label: 'Matelas sécurité',
+          emoji: '🛟',
+          priority: 1,
+          allocation: { type: 'fixed', value: 300 },
+          children: [],
+        },
+        {
+          id: 'apport',
+          label: 'Apport immobilier',
+          emoji: '🏡',
+          priority: 2,
+          allocation: { type: 'percent_remaining', pct: 50 },
+          children: [],
+        },
+        {
+          id: 'pea-a',
+          label: 'PEA de A',
+          emoji: '📊',
+          priority: 3,
+          allocation: { type: 'prorata_income', who: 'A' },
+          children: [],
+        },
+        {
+          id: 'pea-b',
+          label: 'PEA de B',
+          emoji: '📊',
+          priority: 4,
+          allocation: { type: 'prorata_income', who: 'B' },
+          children: [],
+        },
+      ],
+    };
+
+    // revenus 60% A / 40% B → les 350€ restants doivent se répartir 210€ / 140€
+    const result = runWaterfall({ income: { a: 600, b: 400 }, envelopes: [investissement] });
+
+    expect(result.envelopeResults[0].children.map((c) => [c.envelopeId, c.amount])).toEqual([
+      ['matelas', 300],
+      ['apport', 350],
+      ['pea-a', 210],
+      ['pea-b', 140],
+    ]);
+  });
+
+  it('un seul enfant prorata_income prend sa part, pas 100% du reste', () => {
     const envelope: Envelope = {
       id: 'env',
       label: 'Env',
       emoji: '💰',
       priority: 1,
       allocation: { type: 'fixed', value: 1000 },
-      rules: [
+      children: [
         {
-          id: 'r1',
-          label: 'Règle',
+          id: 'pea-a',
+          label: 'PEA de A',
+          emoji: '📊',
           priority: 1,
-          amount: { type: 'fixed', value: 200 },
-          recipient: { type: 'shared_pot', potId: 'pot1' },
-          condition: { type: 'skip_if_pot_above', potId: 'pot1', threshold: 100 },
+          allocation: { type: 'prorata_income', who: 'A' },
+          children: [],
         },
       ],
     };
 
-    const result = runWaterfall({
-      income: { a: 1000, b: 0 },
-      envelopes: [envelope],
-      pots: { pot1: 150 },
-    });
+    const result = runWaterfall({ income: { a: 600, b: 400 }, envelopes: [envelope] });
 
-    expect(result.envelopeResults[0].ruleAllocations[0]).toMatchObject({ amount: 0, skipped: true });
+    expect(result.envelopeResults[0].children[0].amount).toBe(600);
   });
 
-  it('active_from_date: date future => règle skip', () => {
-    const envelope: Envelope = {
-      id: 'env',
-      label: 'Env',
+  it('la récursion va au-delà d\'un niveau si besoin', () => {
+    const root: Envelope = {
+      id: 'root',
+      label: 'Root',
       emoji: '💰',
       priority: 1,
-      allocation: { type: 'fixed', value: 1000 },
-      rules: [
+      allocation: { type: 'fixed', value: 100 },
+      children: [
         {
-          id: 'r1',
-          label: 'Règle',
+          id: 'mid',
+          label: 'Mid',
+          emoji: '📦',
           priority: 1,
-          amount: { type: 'fixed', value: 200 },
-          recipient: { type: 'shared_pot', potId: 'pot1' },
-          condition: { type: 'active_from_date', date: '2099-01-01' },
+          allocation: { type: 'percent_envelope', pct: 100 },
+          children: [
+            {
+              id: 'leaf',
+              label: 'Leaf',
+              emoji: '🍃',
+              priority: 1,
+              allocation: { type: 'percent_envelope', pct: 50 },
+              children: [],
+            },
+          ],
         },
       ],
     };
 
-    const result = runWaterfall({
-      income: { a: 1000, b: 0 },
-      envelopes: [envelope],
-      today: '2026-07-05',
-    });
-
-    expect(result.envelopeResults[0].ruleAllocations[0]).toMatchObject({ amount: 0, skipped: true });
+    const result = runWaterfall({ income: { a: 100, b: 0 }, envelopes: [root] });
+    expect(result.envelopeResults[0].amount).toBe(100);
+    expect(result.envelopeResults[0].children[0].amount).toBe(100);
+    expect(result.envelopeResults[0].children[0].children[0].amount).toBe(50);
   });
 });
 
@@ -170,23 +203,24 @@ describe('runWaterfall — cas limites', () => {
       emoji: '💰',
       priority: 1,
       allocation: { type: 'fixed', value: 100 },
-      rules: [
+      children: [
         {
           id: 'trop-gros',
           label: 'Trop gros',
+          emoji: '💸',
           priority: 1,
-          amount: { type: 'fixed', value: 9999 },
-          recipient: { type: 'shared_pot', potId: 'pot1' },
+          allocation: { type: 'fixed', value: 9999 },
+          children: [],
         },
       ],
     };
 
     const result = runWaterfall({ income: { a: 100, b: 0 }, envelopes: [envelope] });
 
-    expect(result.envelopeResults[0].ruleAllocations[0].amount).toBe(100);
+    expect(result.envelopeResults[0].children[0].amount).toBe(100);
   });
 
-  it('trie enveloppes et règles par priority même si le tableau est dans le désordre', () => {
+  it('trie enveloppes et sous-enveloppes par priority même si le tableau est dans le désordre', () => {
     const envelopes: Envelope[] = [
       {
         id: 'second',
@@ -194,7 +228,7 @@ describe('runWaterfall — cas limites', () => {
         emoji: '2',
         priority: 2,
         allocation: { type: 'percent_envelope', pct: 40 },
-        rules: [],
+        children: [],
       },
       {
         id: 'first',
@@ -202,12 +236,30 @@ describe('runWaterfall — cas limites', () => {
         emoji: '1',
         priority: 1,
         allocation: { type: 'percent_envelope', pct: 60 },
-        rules: [],
+        children: [
+          {
+            id: 'first-b',
+            label: 'First B',
+            emoji: 'b',
+            priority: 2,
+            allocation: { type: 'percent_envelope', pct: 50 },
+            children: [],
+          },
+          {
+            id: 'first-a',
+            label: 'First A',
+            emoji: 'a',
+            priority: 1,
+            allocation: { type: 'percent_envelope', pct: 50 },
+            children: [],
+          },
+        ],
       },
     ];
 
     const result = runWaterfall({ income: { a: 1000, b: 0 }, envelopes });
 
     expect(result.envelopeResults.map((e) => e.envelopeId)).toEqual(['first', 'second']);
+    expect(result.envelopeResults[0].children.map((c) => c.envelopeId)).toEqual(['first-a', 'first-b']);
   });
 });

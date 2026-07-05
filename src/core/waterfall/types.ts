@@ -1,17 +1,21 @@
-// Les 4 types d'allocation — couvrent tous les cas réels
+// Les 4 types d'allocation — couvrent tous les cas réels.
+// `income.a`/`income.b` désignent des personnes stables (pas "moi"/"mon·ma partenaire" — voir
+// le commentaire sur `Income` plus bas), donc `who` a le même sens quel que soit qui consulte
+// l'app.
 export type Amount =
   | { type: 'fixed'; value: number }
   | { type: 'percent_envelope'; pct: number }
   | { type: 'percent_remaining'; pct: number }
-  | { type: 'prorata_income' };
+  | { type: 'prorata_income'; who: 'A' | 'B' };
 
-// Conditions optionnelles sur une règle
+// Conservés fidèles au concept initial (CLAUDE.md) mais non utilisés par le moteur pour
+// l'instant : la subdivision d'une enveloppe se fait via des enveloppes filles
+// (Envelope.children), pas via des Rule avec recipient/condition.
 export type Condition =
   | { type: 'skip_if_goal_reached'; goalId: string }
   | { type: 'skip_if_pot_above'; potId: string; threshold: number }
   | { type: 'active_from_date'; date: string };
 
-// Destination de l'argent alloué par une règle
 export type Recipient =
   | { type: 'shared_pot'; potId: string }
   | { type: 'person'; who: 'A' | 'B' }
@@ -21,7 +25,7 @@ export type Recipient =
 export interface Rule {
   id: string;
   label: string;
-  priority: number; // ordre d'exécution dans l'enveloppe (1 = premier)
+  priority: number;
   amount: Amount;
   recipient: Recipient;
   condition?: Condition;
@@ -31,45 +35,28 @@ export interface Envelope {
   id: string;
   label: string;
   emoji: string;
-  priority: number; // ordre de remplissage des enveloppes
+  priority: number; // ordre de remplissage parmi les enveloppes sœurs
   allocation: Amount;
-  rules: Rule[];
+  children: Envelope[]; // sous-enveloppes, même forme, récursif
 }
 
+// a/b doivent être assignés de façon STABLE (ex: tri par id de profil), pas "moi"/"partenaire" —
+// sinon `who: 'A'` dans un Amount désignerait une personne différente selon qui regarde l'app.
+// Voir src/lib/couple.ts pour le helper qui construit cet objet correctement.
 export interface Income {
   a: number;
   b: number;
 }
 
-export interface GoalsState {
-  [goalId: string]: { current: number; target: number };
-}
-
-export interface PotsState {
-  [potId: string]: number;
-}
-
 export interface WaterfallInput {
   income: Income;
   envelopes: Envelope[];
-  goals?: GoalsState;
-  pots?: PotsState;
-  today?: string; // ISO date, défaut = aujourd'hui
-}
-
-export interface RuleAllocation {
-  envelopeId: string;
-  ruleId: string;
-  amount: number;
-  skipped: boolean;
-  recipient: Recipient;
-  split?: { a: number; b: number }; // uniquement si recipient.type === "prorata"
 }
 
 export interface EnvelopeResult {
   envelopeId: string;
   amount: number;
-  ruleAllocations: RuleAllocation[];
+  children: EnvelopeResult[];
 }
 
 export interface WaterfallResult {

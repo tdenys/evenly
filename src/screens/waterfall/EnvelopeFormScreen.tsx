@@ -4,19 +4,35 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { MainStackParamList } from '@/navigation/RootNavigator';
 import { useStore } from '@/store/useStore';
 import type { Amount } from '@/core/waterfall/types';
+import { findEnvelope } from '@/core/waterfall/tree';
 import AmountEditor from '@/components/AmountEditor';
 import { confirmAction, errorMessage, notify } from '@/lib/alert';
+import { orderCouple } from '@/lib/couple';
 
 type Props = NativeStackScreenProps<MainStackParamList, 'EnvelopeForm'>;
 
 export default function EnvelopeFormScreen({ route, navigation }: Props) {
+  const profile = useStore((s) => s.profile);
+  const partner = useStore((s) => s.partner);
   const envelopes = useStore((s) => s.envelopes);
   const createEnvelope = useStore((s) => s.createEnvelope);
   const updateEnvelope = useStore((s) => s.updateEnvelope);
   const deleteEnvelope = useStore((s) => s.deleteEnvelope);
 
-  const existing = envelopes.find((e) => e.id === route.params.envelopeId);
-  const nextPriority = envelopes.length > 0 ? Math.max(...envelopes.map((e) => e.priority)) + 1 : 1;
+  const personLabels =
+    profile && partner
+      ? (() => {
+          const { personA, personB } = orderCouple(profile, partner);
+          return { A: personA.displayName, B: personB.displayName };
+        })()
+      : { A: 'Personne A', B: 'Personne B' };
+
+  const { envelopeId, parentId } = route.params;
+  const existing = envelopeId ? findEnvelope(envelopes, envelopeId) : undefined;
+  // Priorité par défaut calculée parmi les enveloppes sœurs (enfants du même parent, ou
+  // enveloppes racines si parentId est absent) — pas parmi toutes les enveloppes de l'arbre.
+  const siblings = parentId ? (findEnvelope(envelopes, parentId)?.children ?? []) : envelopes;
+  const nextPriority = siblings.length > 0 ? Math.max(...siblings.map((e) => e.priority)) + 1 : 1;
 
   const [label, setLabel] = useState(existing?.label ?? '');
   const [emoji, setEmoji] = useState(existing?.emoji ?? '💰');
@@ -43,7 +59,7 @@ export default function EnvelopeFormScreen({ route, navigation }: Props) {
       if (existing) {
         await updateEnvelope(existing.id, input);
       } else {
-        await createEnvelope(input);
+        await createEnvelope({ ...input, parentId: parentId ?? null });
       }
       navigation.goBack();
     } catch (err) {
@@ -82,7 +98,7 @@ export default function EnvelopeFormScreen({ route, navigation }: Props) {
       />
 
       <Text style={styles.label}>Allocation</Text>
-      <AmountEditor value={allocation} onChange={setAllocation} />
+      <AmountEditor value={allocation} onChange={setAllocation} personLabels={personLabels} />
 
       <TouchableOpacity style={styles.button} onPress={() => void handleSave()} disabled={saving}>
         <Text style={styles.buttonText}>{saving ? 'Enregistrement...' : 'Enregistrer'}</Text>

@@ -57,7 +57,13 @@ interface StoreState {
   balance: () => Balance | null;
   updateMyIncome: (netIncome: number) => Promise<void>;
   loadEnvelopes: () => Promise<void>;
-  createEnvelope: (input: { label: string; emoji: string; priority: number; allocation: Amount }) => Promise<void>;
+  createEnvelope: (input: {
+    label: string;
+    emoji: string;
+    priority: number;
+    allocation: Amount;
+    parentId: string | null;
+  }) => Promise<void>;
   updateEnvelope: (
     id: string,
     input: { label: string; emoji: string; priority: number; allocation: Amount }
@@ -241,20 +247,29 @@ export const useStore = create<StoreState>((set, get) => ({
 
     const { data, error } = await supabase
       .from('envelopes')
-      .select('id, label, emoji, priority, allocation')
+      .select('id, parent_id, label, emoji, priority, allocation')
       .eq('couple_id', couple.id)
       .order('priority', { ascending: true });
     if (error) throw error;
 
-    const envelopes: Envelope[] = (data ?? []).map((e) => ({
-      id: e.id,
-      label: e.label,
-      emoji: e.emoji,
-      priority: e.priority,
-      allocation: e.allocation as Amount,
-      rules: [],
-    }));
-    set({ envelopes });
+    const rows = data ?? [];
+    const byParent = new Map<string | null, typeof rows>();
+    for (const row of rows) {
+      const key = row.parent_id;
+      if (!byParent.has(key)) byParent.set(key, []);
+      byParent.get(key)!.push(row);
+    }
+    const build = (parentId: string | null): Envelope[] =>
+      (byParent.get(parentId) ?? []).map((row) => ({
+        id: row.id,
+        label: row.label,
+        emoji: row.emoji,
+        priority: row.priority,
+        allocation: row.allocation as Amount,
+        children: build(row.id),
+      }));
+
+    set({ envelopes: build(null) });
   },
 
   createEnvelope: async (input) => {
@@ -263,6 +278,7 @@ export const useStore = create<StoreState>((set, get) => ({
 
     const { error } = await supabase.from('envelopes').insert({
       couple_id: couple.id,
+      parent_id: input.parentId,
       label: input.label,
       emoji: input.emoji,
       priority: input.priority,

@@ -67,8 +67,8 @@ des données et retournent des résultats. Testable avec Jest sans lancer l'app.
 
 ## Le concept central : Waterfall budgétaire
 
-L'argent coule comme une cascade depuis les revenus vers des enveloppes,
-puis vers des règles de plus en plus précises.
+L'argent coule comme une cascade depuis les revenus vers des enveloppes, qui peuvent
+elles-mêmes se subdiviser en sous-enveloppes, à volonté (récursif).
 
 ### Niveau 1 — Les enveloppes
 
@@ -80,22 +80,38 @@ Revenus nets du couple (ex: 5 000€)
 └── 📈 INVESTISSEMENT   20% → 1 000€
 ```
 
-### Niveau 2 — Les règles (au sein de chaque enveloppe)
+### Niveau 2 — Les sous-enveloppes (au sein de chaque enveloppe)
+
+Une sous-enveloppe a **exactement la même forme qu'une enveloppe** (label, emoji, priorité,
+allocation) — pas de notion de destination (`recipient`) ni de condition, juste une subdivision
+de budget. Rien n'empêche une sous-enveloppe d'avoir elle-même des sous-enveloppes.
 
 ```
-INVESTISSEMENT (1 000€)
+✈️ VOYAGE (300€)
+│
+├── 🗾 Voyage Japon        50% → 150€
+└── ⛺ Camping Normandie   50% → 150€
+```
+
+```
+📈 INVESTISSEMENT (1 000€)
 │
 ├── [P1] Matelas sécurité    300€ fixe
-│         ⚠️ SKIP si objectif 10 000€ atteint
 │         Reste = 700€
 │
 ├── [P2] Apport immobilier   50% du reste → 350€
 │         Reste = 350€
 │
-└── [P3] PEA (prorata revenus)
-          ├── PEA de A  → 350€ × (revA / revCouple)
-          └── PEA de B  → 350€ × (revB / revCouple)
+├── [P3] PEA de A (prorata revenus)   → 210€  (60% des revenus du couple)
+└── [P4] PEA de B (prorata revenus)   → 140€  (40% des revenus du couple)
 ```
+
+`A`/`B` sont assignés une fois pour toutes de façon stable (ex: tri par id de profil) — pas
+"moi"/"mon·ma partenaire" — sinon `who: "A"` désignerait une personne différente selon qui
+consulte l'app. Des sous-enveloppes `prorata_income` **consécutives** (par priorité) se
+partagent le même reste figé au début du groupe : A prend `reste × partA`, B prend
+`reste × partB`, et `partA + partB = 1` garantit qu'elles se partagent exactement le total —
+contrairement à un enchaînement naïf où B recevrait sa part d'un reste déjà amputé par A.
 
 ---
 
@@ -105,41 +121,26 @@ INVESTISSEMENT (1 000€)
 // Les 4 types d'allocation — couvrent tous les cas réels
 type Amount =
   | { type: "fixed"; value: number }
-  | { type: "percent_envelope"; pct: number }
-  | { type: "percent_remaining"; pct: number }
-  | { type: "prorata_income" }
-
-// Conditions optionnelles sur une règle
-type Condition =
-  | { type: "skip_if_goal_reached"; goalId: string }
-  | { type: "skip_if_pot_above"; potId: string; threshold: number }
-  | { type: "active_from_date"; date: string }
-
-// Destination de l'argent alloué par une règle
-type Recipient =
-  | { type: "shared_pot"; potId: string }
-  | { type: "person"; who: "A" | "B" }
-  | { type: "prorata" }
-  | { type: "personal_pocket" }
-
-interface Rule {
-  id: string
-  label: string
-  priority: number        // ordre d'exécution dans l'enveloppe (1 = premier)
-  amount: Amount
-  recipient: Recipient
-  condition?: Condition
-}
+  | { type: "percent_envelope"; pct: number }   // % de la capacité initiale du pool à ce niveau
+  | { type: "percent_remaining"; pct: number }  // % de ce qu'il reste au moment de l'évaluation
+  | { type: "prorata_income"; who: "A" | "B" }  // part de ce qu'il reste proportionnelle au revenu de A ou B
 
 interface Envelope {
   id: string
   label: string
   emoji: string
-  priority: number        // ordre de remplissage des enveloppes
+  priority: number        // ordre de remplissage parmi les enveloppes sœurs
   allocation: Amount
-  rules: Rule[]
+  children: Envelope[]    // sous-enveloppes, même forme, récursif
 }
 ```
+
+`Rule`, `Recipient` et `Condition` (destination de l'argent + conditions type
+`skip_if_goal_reached`/`skip_if_pot_above`/`active_from_date`) restent définis dans
+`src/core/waterfall/types.ts` mais **ne sont plus utilisés par le moteur** : la subdivision
+d'une enveloppe se fait via `children`, pas via des règles avec destination. Ces types sont
+conservés au cas où un besoin de "verser vers X, sauf si Y" refasse surface plus tard — mais
+tant que rien ne les utilise, ne pas les câbler dans l'UI ou le moteur.
 
 ---
 
