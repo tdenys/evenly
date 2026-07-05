@@ -2,11 +2,13 @@ import { create } from 'zustand';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { calculateBalance, type Balance } from '@/core/balance/calculateBalance';
+import type { Amount, Envelope } from '@/core/waterfall/types';
 
 export interface Profile {
   id: string;
   displayName: string;
   coupleId: string | null;
+  netIncome: number;
 }
 
 export interface Couple {
@@ -40,6 +42,7 @@ interface StoreState {
   couple: Couple | null;
   expenses: Expense[];
   settlements: Settlement[];
+  envelopes: Envelope[];
   error: string | null;
 
   init: () => void;
@@ -52,6 +55,14 @@ interface StoreState {
   settleUp: () => Promise<void>;
   refresh: () => Promise<void>;
   balance: () => Balance | null;
+  updateMyIncome: (netIncome: number) => Promise<void>;
+  loadEnvelopes: () => Promise<void>;
+  createEnvelope: (input: { label: string; emoji: string; priority: number; allocation: Amount }) => Promise<void>;
+  updateEnvelope: (
+    id: string,
+    input: { label: string; emoji: string; priority: number; allocation: Amount }
+  ) => Promise<void>;
+  deleteEnvelope: (id: string) => Promise<void>;
 }
 
 let realtimeChannel: RealtimeChannel | null = null;
@@ -80,6 +91,7 @@ export const useStore = create<StoreState>((set, get) => ({
   couple: null,
   expenses: [],
   settlements: [],
+  envelopes: [],
   error: null,
 
   init: () => {
@@ -93,6 +105,7 @@ export const useStore = create<StoreState>((set, get) => ({
           couple: null,
           expenses: [],
           settlements: [],
+          envelopes: [],
         });
         return;
       }
@@ -211,6 +224,76 @@ export const useStore = create<StoreState>((set, get) => ({
       settlements.map((s) => ({ fromUser: s.fromUser, toUser: s.toUser, amount: s.amount }))
     );
   },
+
+  updateMyIncome: async (netIncome: number) => {
+    const { profile } = get();
+    if (!profile) throw new Error('Profil introuvable.');
+
+    const { error } = await supabase.from('profiles').update({ net_income: netIncome }).eq('id', profile.id);
+    if (error) throw error;
+
+    await get().refresh();
+  },
+
+  loadEnvelopes: async () => {
+    const { couple } = get();
+    if (!couple) return;
+
+    const { data, error } = await supabase
+      .from('envelopes')
+      .select('id, label, emoji, priority, allocation')
+      .eq('couple_id', couple.id)
+      .order('priority', { ascending: true });
+    if (error) throw error;
+
+    const envelopes: Envelope[] = (data ?? []).map((e) => ({
+      id: e.id,
+      label: e.label,
+      emoji: e.emoji,
+      priority: e.priority,
+      allocation: e.allocation as Amount,
+      rules: [],
+    }));
+    set({ envelopes });
+  },
+
+  createEnvelope: async (input) => {
+    const { couple } = get();
+    if (!couple) throw new Error('Aucun couple actif.');
+
+    const { error } = await supabase.from('envelopes').insert({
+      couple_id: couple.id,
+      label: input.label,
+      emoji: input.emoji,
+      priority: input.priority,
+      allocation: input.allocation,
+    });
+    if (error) throw error;
+
+    await get().loadEnvelopes();
+  },
+
+  updateEnvelope: async (id, input) => {
+    const { error } = await supabase
+      .from('envelopes')
+      .update({
+        label: input.label,
+        emoji: input.emoji,
+        priority: input.priority,
+        allocation: input.allocation,
+      })
+      .eq('id', id);
+    if (error) throw error;
+
+    await get().loadEnvelopes();
+  },
+
+  deleteEnvelope: async (id) => {
+    const { error } = await supabase.from('envelopes').delete().eq('id', id);
+    if (error) throw error;
+
+    await get().loadEnvelopes();
+  },
 }));
 
 async function loadCoupleData(
@@ -220,7 +303,7 @@ async function loadCoupleData(
 ) {
   const { data: profileRow, error: profileError } = await supabase
     .from('profiles')
-    .select('id, display_name, couple_id')
+    .select('id, display_name, couple_id, net_income')
     .eq('id', userId)
     .single();
   if (profileError) {
@@ -232,6 +315,7 @@ async function loadCoupleData(
     id: profileRow.id,
     displayName: profileRow.display_name,
     coupleId: profileRow.couple_id,
+    netIncome: Number(profileRow.net_income),
   };
 
   if (!profile.coupleId) {
@@ -253,12 +337,17 @@ async function loadCoupleData(
 
   const { data: partnerRow } = await supabase
     .from('profiles')
-    .select('id, display_name, couple_id')
+    .select('id, display_name, couple_id, net_income')
     .eq('couple_id', couple.id)
     .neq('id', userId)
     .maybeSingle();
   const partner: Profile | null = partnerRow
-    ? { id: partnerRow.id, displayName: partnerRow.display_name, coupleId: partnerRow.couple_id }
+    ? {
+        id: partnerRow.id,
+        displayName: partnerRow.display_name,
+        coupleId: partnerRow.couple_id,
+        netIncome: Number(partnerRow.net_income),
+      }
     : null;
 
   if (!partner) {

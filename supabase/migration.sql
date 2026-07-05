@@ -158,3 +158,32 @@ grant select, insert on settlements to authenticated;
 -- Realtime: permet à Supabase Realtime de streamer les inserts sur ces tables
 alter publication supabase_realtime add table expenses;
 alter publication supabase_realtime add table settlements;
+
+-- ============================================================
+-- V2 — Waterfall (enveloppes seules, sans règles/goals/pots)
+-- ============================================================
+
+alter table profiles add column net_income numeric(10,2) not null default 0;
+
+create table envelopes (
+  id uuid primary key default gen_random_uuid(),
+  couple_id uuid not null references couples(id),
+  label text not null,
+  emoji text not null default '💰',
+  priority int not null,
+  allocation jsonb not null, -- sérialisation directe du type Amount (src/core/waterfall/types.ts)
+  created_at timestamptz not null default now()
+);
+
+alter table envelopes enable row level security;
+
+create policy "select couple envelopes" on envelopes
+  for select to authenticated using (couple_id = auth_couple_id());
+create policy "insert couple envelopes" on envelopes
+  for insert to authenticated with check (couple_id = auth_couple_id());
+create policy "update couple envelopes" on envelopes
+  for update to authenticated using (couple_id = auth_couple_id());
+create policy "delete couple envelopes" on envelopes
+  for delete to authenticated using (couple_id = auth_couple_id());
+
+grant select, insert, update, delete on envelopes to authenticated;

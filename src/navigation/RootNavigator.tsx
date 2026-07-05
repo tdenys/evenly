@@ -9,6 +9,9 @@ import CreateOrJoinCoupleScreen from '@/screens/onboarding/CreateOrJoinCoupleScr
 import WaitingForPartnerScreen from '@/screens/onboarding/WaitingForPartnerScreen';
 import DashboardScreen from '@/screens/DashboardScreen';
 import AddExpenseScreen from '@/screens/AddExpenseScreen';
+import WaterfallScreen from '@/screens/waterfall/WaterfallScreen';
+import EnvelopeFormScreen from '@/screens/waterfall/EnvelopeFormScreen';
+import IncomeScreen from '@/screens/waterfall/IncomeScreen';
 
 export type AuthStackParamList = {
   Login: undefined;
@@ -18,6 +21,9 @@ export type AuthStackParamList = {
 export type MainStackParamList = {
   Dashboard: undefined;
   AddExpense: undefined;
+  Waterfall: undefined;
+  EnvelopeForm: { envelopeId?: string };
+  Income: undefined;
 };
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -45,6 +51,13 @@ function MainNavigator() {
         component={AddExpenseScreen}
         options={{ title: 'Ajouter une dépense' }}
       />
+      <MainStack.Screen name="Waterfall" component={WaterfallScreen} options={{ title: 'Budget' }} />
+      <MainStack.Screen
+        name="EnvelopeForm"
+        component={EnvelopeFormScreen}
+        options={{ title: 'Enveloppe' }}
+      />
+      <MainStack.Screen name="Income" component={IncomeScreen} options={{ title: 'Revenus' }} />
     </MainStack.Navigator>
   );
 }

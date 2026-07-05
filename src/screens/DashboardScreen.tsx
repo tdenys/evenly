@@ -12,12 +12,9 @@ import { useShallow } from 'zustand/react/shallow';
 import type { MainStackParamList } from '@/navigation/RootNavigator';
 import { useStore, type Expense } from '@/store/useStore';
 import { confirmAction, errorMessage, notify } from '@/lib/alert';
+import { formatAmount } from '@/lib/format';
 
 type Props = NativeStackScreenProps<MainStackParamList, 'Dashboard'>;
-
-function formatAmount(amount: number): string {
-  return `${amount.toFixed(2)} €`;
-}
 
 export default function DashboardScreen({ navigation }: Props) {
   const profile = useStore((s) => s.profile);
@@ -107,6 +104,10 @@ export default function DashboardScreen({ navigation }: Props) {
         <Text style={styles.addButtonText}>+ Ajouter une dépense</Text>
       </TouchableOpacity>
 
+      <TouchableOpacity style={styles.waterfallButton} onPress={() => navigation.navigate('Waterfall')}>
+        <Text style={styles.waterfallButtonText}>📊 Budget (waterfall)</Text>
+      </TouchableOpacity>
+
       <TouchableOpacity onPress={() => void signOut()} style={styles.signOut}>
         <Text style={styles.link}>Se déconnecter</Text>
       </TouchableOpacity>
@@ -153,6 +154,15 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   addButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  waterfallButton: {
+    borderWidth: 1,
+    borderColor: '#2563eb',
+    borderRadius: 8,
+    padding: 14,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  waterfallButtonText: { color: '#2563eb', fontSize: 16, fontWeight: '600' },
   signOut: { marginTop: 16, marginBottom: 8 },
   link: { color: '#999', textAlign: 'center' },
 });
