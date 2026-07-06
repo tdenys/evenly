@@ -1,4 +1,5 @@
 import type { Envelope, EnvelopeResult } from './types';
+import { round2 } from './engine';
 
 export function findEnvelope(envelopes: Envelope[], id: string): Envelope | undefined {
   for (const envelope of envelopes) {
@@ -26,4 +27,19 @@ export function findSiblings(envelopes: Envelope[], id: string): Envelope[] | un
     if (found) return found;
   }
   return undefined;
+}
+
+export interface ChildrenSummary {
+  remaining: number; // ce qu'il reste à placer dans `parentAmount` (toujours >= 0, grâce au clamp)
+  overflow: number; // > 0 si la somme des demandes des enfants dépasse `parentAmount`
+}
+
+/** Résumé du remplissage d'une enveloppe (ou du revenu total à la racine) par ses enfants. */
+export function summarizeChildren(parentAmount: number, children: EnvelopeResult[]): ChildrenSummary {
+  const allocated = children.reduce((sum, c) => sum + c.amount, 0);
+  const requested = children.reduce((sum, c) => sum + c.requestedAmount, 0);
+  return {
+    remaining: round2(parentAmount - allocated),
+    overflow: round2(Math.max(requested - parentAmount, 0)),
+  };
 }

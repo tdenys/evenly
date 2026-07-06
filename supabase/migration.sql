@@ -193,3 +193,9 @@ grant select, insert, update, delete on envelopes to authenticated;
 -- ============================================================
 
 alter table envelopes add column parent_id uuid references envelopes(id) on delete cascade;
+
+-- ============================================================
+-- V2 — Activer / désactiver une enveloppe (matelas de sécurité plein, etc.)
+-- ============================================================
+
+alter table envelopes add column enabled boolean not null default true;

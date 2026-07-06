@@ -6,7 +6,7 @@ import type { MainStackParamList } from '@/navigation/RootNavigator';
 import { useStore } from '@/store/useStore';
 import { runWaterfall } from '@/core/waterfall/engine';
 import { findEnvelopeResult } from '@/core/waterfall/tree';
-import { SiblingEnvelopeList } from '@/components/EnvelopeTreeRow';
+import { describeChildrenSummary, SiblingEnvelopeList } from '@/components/EnvelopeTreeRow';
 import { formatAmount } from '@/lib/format';
 import { errorMessage, notify } from '@/lib/alert';
 import { coupleIncome, coupleLabels } from '@/lib/couple';
@@ -20,6 +20,7 @@ export default function WaterfallScreen({ navigation }: Props) {
   const loadEnvelopes = useStore((s) => s.loadEnvelopes);
   const refresh = useStore((s) => s.refresh);
   const reorderEnvelopeTo = useStore((s) => s.reorderEnvelopeTo);
+  const setEnvelopeEnabled = useStore((s) => s.setEnvelopeEnabled);
   const [loading, setLoading] = useState(true);
   const [dragging, setDragging] = useState(false);
 
@@ -45,7 +46,8 @@ export default function WaterfallScreen({ navigation }: Props) {
     [envelopes, profile, partner]
   );
 
-  const getAmount = (id: string) => findEnvelopeResult(result.envelopeResults, id)?.amount ?? 0;
+  const getResult = (id: string) => findEnvelopeResult(result.envelopeResults, id);
+  const summary = describeChildrenSummary(result.totalIncome, result.envelopeResults, 'non alloué');
 
   const personLabels = coupleLabels(profile, partner);
 
@@ -53,13 +55,17 @@ export default function WaterfallScreen({ navigation }: Props) {
     reorderEnvelopeTo(id, targetIndex).catch((err) => notify('Erreur', errorMessage(err)));
   };
 
+  const handleToggleEnabled = (id: string, enabled: boolean) => {
+    setEnvelopeEnabled(id, enabled).catch((err) => notify('Erreur', errorMessage(err)));
+  };
+
   return (
     <View style={styles.container}>
-      <View style={styles.summaryCard}>
+      <View style={[styles.summaryCard, styles.inset]}>
         <Text style={styles.summaryLabel}>Revenu total du couple</Text>
         <Text style={styles.summaryAmount}>{formatAmount(result.totalIncome)}</Text>
-        {result.remainingIncome > 0.01 && (
-          <Text style={styles.remaining}>{formatAmount(result.remainingIncome)} non alloué</Text>
+        {summary && (
+          <Text style={summary.isOverflow ? styles.overflow : styles.remaining}>{summary.text}</Text>
         )}
       </View>
 
@@ -69,25 +75,30 @@ export default function WaterfallScreen({ navigation }: Props) {
         scrollEnabled={!dragging}
       >
         {envelopes.length === 0 && !loading && (
-          <Text style={styles.empty}>Aucune enveloppe pour l'instant.</Text>
+          <Text style={[styles.empty, styles.inset]}>Aucune enveloppe pour l'instant.</Text>
         )}
         <SiblingEnvelopeList
           envelopes={envelopes}
           depth={0}
-          getAmount={getAmount}
+          parentAmount={result.totalIncome}
+          getResult={getResult}
           personLabels={personLabels}
           onReorder={handleReorder}
           onAddChild={(parentId) => navigation.navigate('EnvelopeForm', { parentId })}
           onEdit={(envelopeId) => navigation.navigate('EnvelopeForm', { envelopeId })}
+          onToggleEnabled={handleToggleEnabled}
           onDragStateChange={setDragging}
         />
       </ScrollView>
 
-      <TouchableOpacity style={styles.addButton} onPress={() => navigation.navigate('EnvelopeForm', {})}>
+      <TouchableOpacity
+        style={[styles.addButton, styles.inset]}
+        onPress={() => navigation.navigate('EnvelopeForm', {})}
+      >
         <Text style={styles.addButtonText}>+ Ajouter une enveloppe</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.incomeButton} onPress={() => navigation.navigate('Income')}>
+      <TouchableOpacity style={[styles.incomeButton, styles.inset]} onPress={() => navigation.navigate('Income')}>
         <Text style={styles.incomeButtonText}>💶 Revenus</Text>
       </TouchableOpacity>
     </View>
@@ -95,7 +106,11 @@ export default function WaterfallScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
+  container: { flex: 1, paddingTop: 16, paddingBottom: 16 },
+  // Le contenu de la liste d'enveloppes doit pouvoir s'étendre d'un bord à l'autre de l'écran
+  // (pas de marge droite/gauche) — cette marge horizontale est donc appliquée au cas par cas aux
+  // autres éléments (carte de résumé, boutons) plutôt qu'au conteneur entier.
+  inset: { marginHorizontal: 16 },
   summaryCard: {
     backgroundColor: '#eef2ff',
     borderRadius: 12,
@@ -107,6 +122,7 @@ const styles = StyleSheet.create({
   summaryLabel: { fontSize: 13, color: '#555' },
   summaryAmount: { fontSize: 24, fontWeight: '800' },
   remaining: { fontSize: 13, color: '#b45309', marginTop: 4 },
+  overflow: { fontSize: 13, color: '#dc2626', fontWeight: '600', marginTop: 4 },
   // Sur mobile web, un pull vers le bas en haut de la liste peut déclencher le "tirer pour
   // actualiser" natif du navigateur (Chrome/Safari), en plus de notre propre glisser-déposer —
   // overscrollBehaviorY le désactive au niveau CSS (sans effet sur natif/Expo Go).

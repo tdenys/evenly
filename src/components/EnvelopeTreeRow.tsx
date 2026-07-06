@@ -1,11 +1,8 @@
 import { useRef, useState } from 'react';
-import { Animated, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import type { Amount, Envelope } from '@/core/waterfall/types';
-import { formatAmount } from '@/lib/format';
-
-const LONG_PRESS_MS = 300;
-const MOVE_CANCEL_THRESHOLD = 8; // px — au-delà, avant l'appui long, on laisse le scroll agir
-const TAP_THRESHOLD = 8; // px — en-deçà au relâché, on considère que c'était un tap
+import { Animated, PanResponder, Platform, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import type { Amount, Envelope, EnvelopeResult } from '@/core/waterfall/types';
+import { summarizeChildren } from '@/core/waterfall/tree';
+import { formatAmount, formatAmountWithPct, formatPct } from '@/lib/format';
 
 export interface PersonLabels {
   A: string;
@@ -25,16 +22,41 @@ function describeAllocation(amount: Amount, personLabels: PersonLabels): string 
   }
 }
 
+/** Ligne "reste à placer" / avertissement de dépassement sous une liste d'enfants — le
+ * dépassement prime (c'est le signal le plus important), sinon le reste si non nul, sinon rien
+ * (déjà entièrement alloué). Le % est toujours relatif à `parentAmount` (le pool direct).
+ * `remainingLabel` distingue le libellé selon le contexte : "non alloué" pour le revenu total à
+ * la racine, "restant" pour le budget encore disponible dans une enveloppe. */
+export function describeChildrenSummary(
+  parentAmount: number,
+  children: EnvelopeResult[],
+  remainingLabel = 'restant'
+): { text: string; isOverflow: boolean } | null {
+  const summary = summarizeChildren(parentAmount, children);
+  if (summary.overflow > 0.01) {
+    return { text: `⚠️ ${formatAmountWithPct(summary.overflow, parentAmount)} demandés en trop`, isOverflow: true };
+  }
+  if (summary.remaining > 0.01) {
+    return { text: `${formatAmountWithPct(summary.remaining, parentAmount)} ${remainingLabel}`, isOverflow: false };
+  }
+  return null;
+}
+
 interface ListProps {
   envelopes: Envelope[];
   depth: number;
-  getAmount: (id: string) => number;
+  /** Pool direct dont ces enveloppes sœurs tirent leur part — le revenu total à la racine, ou
+   * le montant de l'enveloppe parente pour des sous-enveloppes. Sert à afficher le % à côté du
+   * montant de chaque ligne. */
+  parentAmount: number;
+  getResult: (id: string) => EnvelopeResult | undefined;
   personLabels: PersonLabels;
   onReorder: (id: string, targetIndex: number) => void;
   onAddChild: (parentId: string) => void;
   onEdit: (envelopeId: string) => void;
-  /** Remonté jusqu'à l'écran pour désactiver le ScrollView (et son tirer-pour-rafraîchir)
-   * pendant qu'un glissé est actif — sinon les deux gestes entrent en conflit. */
+  onToggleEnabled: (id: string, enabled: boolean) => void;
+  /** Remonté jusqu'à l'écran pour désactiver le ScrollView pendant qu'un glissé est actif —
+   * sinon les deux gestes entrent en conflit. */
   onDragStateChange?: (dragging: boolean) => void;
 }
 
@@ -65,81 +87,53 @@ function computeTargetIndex(startIndex: number, dy: number, heights: number[]): 
 }
 
 /**
- * Liste d'enveloppes sœurs, réordonnable par glisser-déposer depuis n'importe quel point de la
- * ligne (appui maintenu ~300ms puis déplacement — un tap rapide déplie/replie à la place, un
- * mouvement avant la fin de l'appui long est traité comme un scroll et relâché au ScrollView).
+ * Liste d'enveloppes sœurs, réordonnable par glisser-déposer depuis la poignée dédiée de
+ * chaque ligne (pas depuis toute la ligne : sur web, réserver le toucher pour un drag potentiel
+ * empêche le navigateur de scroller avec, même si le drag n'est finalement pas activé — plus il
+ * y a de lignes dépliées, plus ça bloque le scroll. La poignée reste large pour rester facile à
+ * viser au pouce).
  */
 export function SiblingEnvelopeList({
   envelopes,
   depth,
-  getAmount,
+  parentAmount,
+  getResult,
   personLabels,
   onReorder,
   onAddChild,
   onEdit,
+  onToggleEnabled,
   onDragStateChange,
 }: ListProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const dragY = useRef(new Animated.Value(0)).current;
   const heightsRef = useRef<Map<string, number>>(new Map());
   const dragStartIndexRef = useRef(0);
-  const dragActivatedRef = useRef(false);
-  const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const clearPressTimer = () => {
-    if (pressTimerRef.current) {
-      clearTimeout(pressTimerRef.current);
-      pressTimerRef.current = null;
-    }
-  };
-
-  const panResponderFor = (envelope: Envelope, index: number, onTap: () => void) =>
+  const panResponderFor = (envelope: Envelope, index: number) =>
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
-        dragActivatedRef.current = false;
-        clearPressTimer();
-        pressTimerRef.current = setTimeout(() => {
-          dragActivatedRef.current = true;
-          dragStartIndexRef.current = index;
-          setDraggingId(envelope.id);
-          dragY.setValue(0);
-          onDragStateChange?.(true);
-        }, LONG_PRESS_MS);
+        dragStartIndexRef.current = index;
+        setDraggingId(envelope.id);
+        dragY.setValue(0);
+        onDragStateChange?.(true);
       },
-      onPanResponderMove: (_evt, gestureState) => {
-        if (dragActivatedRef.current) {
-          dragY.setValue(gestureState.dy);
-        } else if (Math.abs(gestureState.dy) > MOVE_CANCEL_THRESHOLD || Math.abs(gestureState.dx) > MOVE_CANCEL_THRESHOLD) {
-          // Bouge trop tôt : probablement une intention de scroll, on annule l'appui long.
-          clearPressTimer();
-        }
-      },
-      // Tant que l'appui long n'a pas activé le glissé, on laisse un parent (le ScrollView)
-      // reprendre la main s'il détecte un scroll — sinon (glissé actif) on garde la main.
-      onPanResponderTerminationRequest: () => !dragActivatedRef.current,
+      onPanResponderMove: Animated.event([null, { dy: dragY }], { useNativeDriver: false }),
       onPanResponderRelease: (_evt, gestureState) => {
-        clearPressTimer();
-        if (dragActivatedRef.current) {
-          const heights = envelopes.map((e) => heightsRef.current.get(e.id) ?? 0);
-          const targetIndex = computeTargetIndex(dragStartIndexRef.current, gestureState.dy, heights);
-          setDraggingId(null);
-          dragY.setValue(0);
-          dragActivatedRef.current = false;
-          onDragStateChange?.(false);
-          if (targetIndex !== dragStartIndexRef.current) {
-            onReorder(envelope.id, targetIndex);
-          }
-        } else if (Math.abs(gestureState.dy) < TAP_THRESHOLD && Math.abs(gestureState.dx) < TAP_THRESHOLD) {
-          onTap();
+        const heights = envelopes.map((e) => heightsRef.current.get(e.id) ?? 0);
+        const targetIndex = computeTargetIndex(dragStartIndexRef.current, gestureState.dy, heights);
+        setDraggingId(null);
+        dragY.setValue(0);
+        onDragStateChange?.(false);
+        if (targetIndex !== dragStartIndexRef.current) {
+          onReorder(envelope.id, targetIndex);
         }
       },
       onPanResponderTerminate: () => {
-        clearPressTimer();
-        if (dragActivatedRef.current) onDragStateChange?.(false);
-        dragActivatedRef.current = false;
         setDraggingId(null);
         dragY.setValue(0);
+        onDragStateChange?.(false);
       },
     });
 
@@ -152,17 +146,18 @@ export function SiblingEnvelopeList({
             key={envelope.id}
             envelope={envelope}
             depth={depth}
-            index={index}
             isDragging={isDragging}
             dragY={dragY}
-            getAmount={getAmount}
+            parentAmount={parentAmount}
+            getResult={getResult}
             personLabels={personLabels}
             onReorder={onReorder}
             onAddChild={onAddChild}
             onEdit={onEdit}
+            onToggleEnabled={onToggleEnabled}
             onDragStateChange={onDragStateChange}
             onLayoutHeight={(height) => heightsRef.current.set(envelope.id, height)}
-            makePanResponder={(onTap) => panResponderFor(envelope, index, onTap)}
+            dragHandlers={panResponderFor(envelope, index).panHandlers}
           />
         );
       })}
@@ -173,17 +168,18 @@ export function SiblingEnvelopeList({
 interface ContainerProps {
   envelope: Envelope;
   depth: number;
-  index: number;
   isDragging: boolean;
   dragY: Animated.Value;
-  getAmount: (id: string) => number;
+  parentAmount: number;
+  getResult: (id: string) => EnvelopeResult | undefined;
   personLabels: PersonLabels;
   onReorder: (id: string, targetIndex: number) => void;
   onAddChild: (parentId: string) => void;
   onEdit: (envelopeId: string) => void;
+  onToggleEnabled: (id: string, enabled: boolean) => void;
   onDragStateChange?: (dragging: boolean) => void;
   onLayoutHeight: (height: number) => void;
-  makePanResponder: (onTap: () => void) => ReturnType<typeof PanResponder.create>;
+  dragHandlers: ReturnType<typeof PanResponder.create>['panHandlers'];
 }
 
 function EnvelopeTreeRowContainer({
@@ -191,42 +187,72 @@ function EnvelopeTreeRowContainer({
   depth,
   isDragging,
   dragY,
-  getAmount,
+  parentAmount,
+  getResult,
   personLabels,
   onReorder,
   onAddChild,
   onEdit,
+  onToggleEnabled,
   onDragStateChange,
   onLayoutHeight,
-  makePanResponder,
+  dragHandlers,
 }: ContainerProps) {
   const [expanded, setExpanded] = useState(false);
-  const panResponder = makePanResponder(() => setExpanded((e) => !e));
+  const result = getResult(envelope.id);
+  const amount = result?.amount ?? 0;
+  const pct = formatPct(amount, parentAmount);
+  const summary = expanded ? describeChildrenSummary(amount, result?.children ?? []) : null;
 
   return (
     <Animated.View
       onLayout={(e) => onLayoutHeight(e.nativeEvent.layout.height)}
       style={isDragging ? [styles.dragging, { transform: [{ translateY: dragY }] }] : undefined}
     >
-      <View style={[styles.row, { paddingLeft: 16 + depth * 20 }]} {...panResponder.panHandlers}>
-        <View style={styles.rowTop}>
-          <View style={styles.main}>
-            <Text style={styles.chevron}>{expanded ? '▾' : '▸'}</Text>
-            <Text style={styles.label} numberOfLines={1}>
-              {envelope.emoji} {envelope.label}
-            </Text>
+      <View style={[styles.row, { paddingLeft: 16 + depth * 20 }, !envelope.enabled && styles.rowDisabled]}>
+        <TouchableOpacity style={styles.rowContent} onPress={() => setExpanded((e) => !e)}>
+          <View style={styles.rowTop}>
+            <View style={styles.main}>
+              <Text style={styles.chevron}>{expanded ? '▾' : '▸'}</Text>
+              <Text style={styles.label} numberOfLines={1}>
+                {envelope.emoji} {envelope.label}
+              </Text>
+            </View>
+
+            {/* Montant et % empilés dans la même colonne alignée à droite, pour que le % tombe
+                exactement sous le €, quelle que soit la largeur prise par le switch/crayon à
+                droite (sinon le % — aligné sur toute la largeur de la ligne — finit plus à
+                droite que le €, qui lui s'arrête avant le switch/crayon). */}
+            <View style={styles.amountColumn}>
+              <Text style={styles.amount}>{formatAmount(amount)}</Text>
+              {pct && <Text style={styles.pct}>{pct}</Text>}
+            </View>
+
+            <View
+              style={styles.switchWrap}
+              // Sur web, le clic sur le Switch (un <input> natif) bubble en DOM jusqu'au
+              // TouchableOpacity parent (onClick), qui bascule alors aussi l'expand/collapse de
+              // la ligne — la négociation de responder React Native ne suffit pas à l'empêcher
+              // ici, il faut couper la propagation DOM directement.
+              {...(Platform.OS === 'web' ? { onClick: (e: { stopPropagation: () => void }) => e.stopPropagation() } : null)}
+            >
+              <Switch value={envelope.enabled} onValueChange={(value) => onToggleEnabled(envelope.id, value)} />
+            </View>
+
+            <TouchableOpacity onPress={() => onEdit(envelope.id)} hitSlop={8}>
+              <Text style={styles.edit}>✏️</Text>
+            </TouchableOpacity>
           </View>
 
-          <Text style={styles.amount}>{formatAmount(getAmount(envelope.id))}</Text>
+          <Text style={styles.description} numberOfLines={1}>
+            {describeAllocation(envelope.allocation, personLabels)}
+            {!envelope.enabled && ' · Désactivée'}
+          </Text>
+        </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => onEdit(envelope.id)} hitSlop={8}>
-            <Text style={styles.edit}>✏️</Text>
-          </TouchableOpacity>
+        <View style={styles.grip} {...dragHandlers}>
+          <Text style={styles.gripText}>⠿</Text>
         </View>
-
-        <Text style={styles.description} numberOfLines={1}>
-          {describeAllocation(envelope.allocation, personLabels)}
-        </Text>
       </View>
 
       {expanded && (
@@ -234,13 +260,26 @@ function EnvelopeTreeRowContainer({
           <SiblingEnvelopeList
             envelopes={envelope.children}
             depth={depth + 1}
-            getAmount={getAmount}
+            parentAmount={amount}
+            getResult={getResult}
             personLabels={personLabels}
             onReorder={onReorder}
             onAddChild={onAddChild}
             onEdit={onEdit}
+            onToggleEnabled={onToggleEnabled}
             onDragStateChange={onDragStateChange}
           />
+          {summary && (
+            <Text
+              style={[
+                styles.summary,
+                { marginLeft: 16 + (depth + 1) * 20 },
+                summary.isOverflow && styles.summaryOverflow,
+              ]}
+            >
+              {summary.text}
+            </Text>
+          )}
           <TouchableOpacity
             style={[styles.addChild, { marginLeft: 16 + (depth + 1) * 20 }]}
             onPress={() => onAddChild(envelope.id)}
@@ -255,15 +294,20 @@ function EnvelopeTreeRowContainer({
 
 const styles = StyleSheet.create({
   row: {
-    paddingVertical: 10,
-    paddingRight: 12,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    paddingRight: 4,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#ddd',
+  },
+  rowDisabled: { opacity: 0.5 },
+  rowContent: {
+    flex: 1,
+    paddingVertical: 10,
     // Sur web, glisser la souris sur du texte déclenche la sélection native du navigateur —
     // sans rapport avec notre geste de drag, juste un artefact visuel du navigateur à éviter.
     userSelect: 'none',
   },
-  rowTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   dragging: {
     zIndex: 10,
     elevation: 4,
@@ -273,12 +317,34 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
   },
+  // flex-start (pas 'center') : la colonne montant peut avoir 2 lignes (€ puis %) alors que le
+  // libellé/switch/crayon n'en ont qu'une — on veut aligner leurs sommets, pas les centrer par
+  // rapport à une colonne plus haute qu'eux.
+  rowTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 4 },
   main: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
   chevron: { width: 16, color: '#999' },
   label: { fontSize: 16, fontWeight: '600', flexShrink: 1 },
-  amount: { fontSize: 15, fontWeight: '700', marginLeft: 8 },
-  edit: { fontSize: 15, marginLeft: 12 },
+  amountColumn: { alignItems: 'flex-end' },
+  amount: { fontSize: 15, fontWeight: '700' },
+  pct: { fontSize: 12, color: '#888', marginTop: 2 },
+  // Compense le fait qu'un `transform: scale` réduit l'apparence du Switch sans réduire la
+  // place qu'il réserve dans le flex layout — la marge négative récupère cet espace mort.
+  switchWrap: { transform: [{ scale: 0.75 }], marginHorizontal: -8 },
+  edit: { fontSize: 15 },
   description: { fontSize: 12, color: '#888', marginLeft: 22, marginTop: 2 },
+  summary: { fontSize: 13, color: '#b45309', fontWeight: '600', paddingVertical: 6 },
+  summaryOverflow: { color: '#dc2626' },
   addChild: { paddingVertical: 10 },
   addChildText: { color: '#2563eb', fontSize: 14, fontWeight: '600' },
+  // Poignée de glisser dédiée : large (48px) pour rester facile à viser au pouce, mais limitée
+  // à cette zone pour que le reste de la ligne (l'essentiel de l'écran) reste scrollable
+  // normalement — voir le commentaire sur SiblingEnvelopeList plus haut.
+  grip: {
+    width: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: '#eee',
+  },
+  gripText: { fontSize: 22, color: '#999' },
 });

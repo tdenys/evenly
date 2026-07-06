@@ -37,6 +37,9 @@ export interface Envelope {
   emoji: string;
   priority: number; // ordre de remplissage parmi les enveloppes sœurs
   allocation: Amount;
+  // Interrupteur manuel (pas de suivi automatique de solde/objectif) : une enveloppe désactivée
+  // vaut 0€ et ne consomme rien du pool, donc ce qu'elle aurait pris profite à la sœur suivante.
+  enabled: boolean;
   children: Envelope[]; // sous-enveloppes, même forme, récursif
 }
 
@@ -56,6 +59,7 @@ export interface WaterfallInput {
 export interface EnvelopeResult {
   envelopeId: string;
   amount: number;
+  requestedAmount: number; // demandé avant plafonnement — > amount signale un dépassement
   children: EnvelopeResult[];
 }
 

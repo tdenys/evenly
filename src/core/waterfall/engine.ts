@@ -1,6 +1,6 @@
 import type { Amount, Envelope, EnvelopeResult, Income, WaterfallInput, WaterfallResult } from './types';
 
-const round2 = (value: number) => Math.round(value * 100) / 100;
+export const round2 = (value: number) => Math.round(value * 100) / 100;
 const clamp = (value: number, poolRemaining: number) => Math.min(Math.max(value, 0), Math.max(poolRemaining, 0));
 
 interface Pool {
@@ -8,19 +8,29 @@ interface Pool {
   poolRemaining: number;
 }
 
-function resolveAmount(amount: Amount, pool: Pool): number {
+interface Resolved {
+  requested: number; // valeur calculée avant plafonnement, juste flooré à 0
+  amount: number; // valeur réellement attribuée (plafonnée au pool restant)
+}
+
+function resolveAmount(amount: Amount, pool: Pool): Resolved {
+  let raw: number;
   switch (amount.type) {
     case 'fixed':
-      return round2(clamp(amount.value, pool.poolRemaining));
+      raw = amount.value;
+      break;
     case 'percent_envelope':
-      return round2(clamp((amount.pct / 100) * pool.poolAtStart, pool.poolRemaining));
+      raw = (amount.pct / 100) * pool.poolAtStart;
+      break;
     case 'percent_remaining':
-      return round2(clamp((amount.pct / 100) * pool.poolRemaining, pool.poolRemaining));
+      raw = (amount.pct / 100) * pool.poolRemaining;
+      break;
     case 'prorata_income':
       // Résolu dans runSiblings (a besoin de `income` et d'une base figée entre sœurs) —
       // ne devrait jamais être appelé ici.
       throw new Error('prorata_income must be resolved by runSiblings');
   }
+  return { requested: round2(Math.max(raw, 0)), amount: round2(clamp(raw, pool.poolRemaining)) };
 }
 
 function incomeShare(who: 'A' | 'B', income: Income): number {
@@ -42,18 +52,30 @@ function runSiblings(envelopes: Envelope[], poolAtStart: number, poolRemaining: 
   let prorataBase: number | null = null;
 
   return byPriority(envelopes).map((envelope) => {
-    let amount: number;
-    if (envelope.allocation.type === 'prorata_income') {
+    let resolved: Resolved;
+    if (!envelope.enabled) {
+      // Désactivée manuellement (ex: "matelas de sécurité" déjà plein) : 0€, ne consomme rien
+      // du pool — donc profite automatiquement à la sœur suivante. Ne touche pas `prorataBase`
+      // : une enveloppe désactivée est transparente pour le regroupement des prorata_income
+      // consécutives (ex: [prorata A, désactivée, prorata B] partagent quand même le même reste).
+      resolved = { requested: 0, amount: 0 };
+    } else if (envelope.allocation.type === 'prorata_income') {
       if (prorataBase === null) prorataBase = remaining;
-      amount = round2(clamp(prorataBase * incomeShare(envelope.allocation.who, income), remaining));
+      const raw = prorataBase * incomeShare(envelope.allocation.who, income);
+      resolved = { requested: round2(Math.max(raw, 0)), amount: round2(clamp(raw, remaining)) };
     } else {
       prorataBase = null;
-      amount = resolveAmount(envelope.allocation, { poolAtStart, poolRemaining: remaining });
+      resolved = resolveAmount(envelope.allocation, { poolAtStart, poolRemaining: remaining });
     }
-    remaining = round2(remaining - amount);
+    remaining = round2(remaining - resolved.amount);
 
-    const children = runSiblings(envelope.children, amount, amount, income);
-    return { envelopeId: envelope.id, amount, children };
+    const children = runSiblings(envelope.children, resolved.amount, resolved.amount, income);
+    return {
+      envelopeId: envelope.id,
+      amount: resolved.amount,
+      requestedAmount: resolved.requested,
+      children,
+    };
   });
 }
 

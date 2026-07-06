@@ -63,14 +63,16 @@ interface StoreState {
     emoji: string;
     priority: number;
     allocation: Amount;
+    enabled: boolean;
     parentId: string | null;
   }) => Promise<void>;
   updateEnvelope: (
     id: string,
-    input: { label: string; emoji: string; priority: number; allocation: Amount }
+    input: { label: string; emoji: string; priority: number; allocation: Amount; enabled: boolean }
   ) => Promise<void>;
   deleteEnvelope: (id: string) => Promise<void>;
   reorderEnvelopeTo: (id: string, targetIndex: number) => Promise<void>;
+  setEnvelopeEnabled: (id: string, enabled: boolean) => Promise<void>;
 }
 
 let realtimeChannel: RealtimeChannel | null = null;
@@ -249,7 +251,7 @@ export const useStore = create<StoreState>((set, get) => ({
 
     const { data, error } = await supabase
       .from('envelopes')
-      .select('id, parent_id, label, emoji, priority, allocation')
+      .select('id, parent_id, label, emoji, priority, allocation, enabled')
       .eq('couple_id', couple.id)
       .order('priority', { ascending: true });
     if (error) throw error;
@@ -268,6 +270,7 @@ export const useStore = create<StoreState>((set, get) => ({
         emoji: row.emoji,
         priority: row.priority,
         allocation: row.allocation as Amount,
+        enabled: row.enabled,
         children: build(row.id),
       }));
 
@@ -285,6 +288,7 @@ export const useStore = create<StoreState>((set, get) => ({
       emoji: input.emoji,
       priority: input.priority,
       allocation: input.allocation,
+      enabled: input.enabled,
     });
     if (error) throw error;
 
@@ -299,6 +303,7 @@ export const useStore = create<StoreState>((set, get) => ({
         emoji: input.emoji,
         priority: input.priority,
         allocation: input.allocation,
+        enabled: input.enabled,
       })
       .eq('id', id);
     if (error) throw error;
@@ -308,6 +313,13 @@ export const useStore = create<StoreState>((set, get) => ({
 
   deleteEnvelope: async (id) => {
     const { error } = await supabase.from('envelopes').delete().eq('id', id);
+    if (error) throw error;
+
+    await get().loadEnvelopes();
+  },
+
+  setEnvelopeEnabled: async (id, enabled) => {
+    const { error } = await supabase.from('envelopes').update({ enabled }).eq('id', id);
     if (error) throw error;
 
     await get().loadEnvelopes();

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import type { Amount } from '@/core/waterfall/types';
 
@@ -43,6 +43,20 @@ export default function AmountEditor({ value, onChange, personLabels }: Props) {
   // Le texte brut est la source de vérité pour l'affichage (pas la valeur numérique déjà
   // parsée) pour ne pas perdre ce que l'utilisateur tape (ex: un "." en fin de saisie).
   const [text, setText] = useState(() => numericFieldValue(value));
+
+  // Resynchronise si `value` change de l'extérieur (ex: le bouton "Combler avec le reste" du
+  // formulaire appelle onChange directement, sans passer par handleTextChange/handleTypeChange
+  // ci-dessous) — mais seulement si la valeur numérique a réellement changé, pour ne pas
+  // écraser une saisie en cours (ex: un "12." en train d'être tapé reste "12." même si l'écho
+  // de onChange(12) revient entre-temps).
+  useEffect(() => {
+    const expected = numericFieldValue(value);
+    const currentNumeric = Number(text.replace(',', '.')) || 0;
+    const expectedNumeric = Number(expected) || 0;
+    if (currentNumeric !== expectedNumeric) {
+      setText(expected);
+    }
+  }, [value]);
 
   const handleTypeChange = (type: AmountType) => {
     if (type === value.type) return;
