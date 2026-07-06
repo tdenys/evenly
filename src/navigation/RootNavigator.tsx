@@ -10,7 +10,6 @@ import WaitingForPartnerScreen from '@/screens/onboarding/WaitingForPartnerScree
 import DashboardScreen from '@/screens/DashboardScreen';
 import AddExpenseScreen from '@/screens/AddExpenseScreen';
 import WaterfallScreen from '@/screens/waterfall/WaterfallScreen';
-import EnvelopeDetailScreen from '@/screens/waterfall/EnvelopeDetailScreen';
 import EnvelopeFormScreen from '@/screens/waterfall/EnvelopeFormScreen';
 import IncomeScreen from '@/screens/waterfall/IncomeScreen';
 
@@ -23,7 +22,6 @@ export type MainStackParamList = {
   Dashboard: undefined;
   AddExpense: undefined;
   Waterfall: undefined;
-  EnvelopeDetail: { envelopeId: string };
   EnvelopeForm: { envelopeId?: string; parentId?: string };
   Income: undefined;
 };
@@ -54,11 +52,6 @@ function MainNavigator() {
         options={{ title: 'Ajouter une dépense' }}
       />
       <MainStack.Screen name="Waterfall" component={WaterfallScreen} options={{ title: 'Budget' }} />
-      <MainStack.Screen
-        name="EnvelopeDetail"
-        component={EnvelopeDetailScreen}
-        options={{ title: 'Enveloppe' }}
-      />
       <MainStack.Screen
         name="EnvelopeForm"
         component={EnvelopeFormScreen}

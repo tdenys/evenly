@@ -3,6 +3,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { calculateBalance, type Balance } from '@/core/balance/calculateBalance';
 import type { Amount, Envelope } from '@/core/waterfall/types';
+import { findSiblings } from '@/core/waterfall/tree';
 
 export interface Profile {
   id: string;
@@ -69,6 +70,7 @@ interface StoreState {
     input: { label: string; emoji: string; priority: number; allocation: Amount }
   ) => Promise<void>;
   deleteEnvelope: (id: string) => Promise<void>;
+  reorderEnvelopeTo: (id: string, targetIndex: number) => Promise<void>;
 }
 
 let realtimeChannel: RealtimeChannel | null = null;
@@ -307,6 +309,32 @@ export const useStore = create<StoreState>((set, get) => ({
   deleteEnvelope: async (id) => {
     const { error } = await supabase.from('envelopes').delete().eq('id', id);
     if (error) throw error;
+
+    await get().loadEnvelopes();
+  },
+
+  reorderEnvelopeTo: async (id, targetIndex) => {
+    const { envelopes } = get();
+    const siblings = findSiblings(envelopes, id);
+    if (!siblings) return;
+
+    const currentIndex = siblings.findIndex((e) => e.id === id);
+    if (currentIndex === -1 || currentIndex === targetIndex) return;
+
+    const reordered = [...siblings];
+    const [moved] = reordered.splice(currentIndex, 1);
+    reordered.splice(targetIndex, 0, moved);
+
+    // Renumérote toutes les enveloppes sœurs selon leur nouvel ordre (le drag & drop peut
+    // déplacer un élément de plusieurs positions d'un coup, contrairement à un simple échange
+    // de voisins).
+    const results = await Promise.all(
+      reordered.map((envelope, index) =>
+        supabase.from('envelopes').update({ priority: index + 1 }).eq('id', envelope.id)
+      )
+    );
+    const firstError = results.find((r) => r.error)?.error;
+    if (firstError) throw firstError;
 
     await get().loadEnvelopes();
   },

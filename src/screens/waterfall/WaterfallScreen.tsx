@@ -1,11 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import type { MainStackParamList } from '@/navigation/RootNavigator';
 import { useStore } from '@/store/useStore';
 import { runWaterfall } from '@/core/waterfall/engine';
-import type { Envelope } from '@/core/waterfall/types';
+import { findEnvelopeResult } from '@/core/waterfall/tree';
+import { SiblingEnvelopeList } from '@/components/EnvelopeTreeRow';
 import { formatAmount } from '@/lib/format';
 import { errorMessage, notify } from '@/lib/alert';
 import { coupleIncome } from '@/lib/couple';
@@ -18,12 +19,14 @@ export default function WaterfallScreen({ navigation }: Props) {
   const envelopes = useStore((s) => s.envelopes);
   const loadEnvelopes = useStore((s) => s.loadEnvelopes);
   const refresh = useStore((s) => s.refresh);
+  const reorderEnvelopeTo = useStore((s) => s.reorderEnvelopeTo);
   const [loading, setLoading] = useState(true);
+  const [dragging, setDragging] = useState(false);
 
   // useFocusEffect (pas useEffect) : native-stack garde cet écran monté en arrière-plan quand
-  // on va sur "Revenus", donc un simple effet "au montage" ne se redéclencherait pas au retour.
-  // refresh() recharge aussi profile/partner (donc leur net_income) — sans ça, un revenu que
-  // le/la partenaire vient de changer sur son propre appareil resterait affiché comme périmé.
+  // on va sur "Revenus"/"Enveloppe", donc un simple effet "au montage" ne se redéclencherait
+  // pas au retour. refresh() recharge aussi profile/partner (donc leur net_income) — sans ça,
+  // un revenu que le/la partenaire vient de changer resterait affiché comme périmé.
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
@@ -42,30 +45,10 @@ export default function WaterfallScreen({ navigation }: Props) {
     [envelopes, profile, partner]
   );
 
-  const handleRefresh = async () => {
-    setLoading(true);
-    try {
-      await Promise.all([loadEnvelopes(), refresh()]);
-    } catch (err) {
-      notify('Erreur', errorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  };
+  const getAmount = (id: string) => findEnvelopeResult(result.envelopeResults, id)?.amount ?? 0;
 
-  const renderEnvelope = ({ item }: { item: Envelope }) => {
-    const amount = result.envelopeResults.find((e) => e.envelopeId === item.id)?.amount ?? 0;
-    return (
-      <TouchableOpacity
-        style={styles.envelopeRow}
-        onPress={() => navigation.navigate('EnvelopeDetail', { envelopeId: item.id })}
-      >
-        <Text style={styles.envelopeLabel}>
-          {item.emoji} {item.label}
-        </Text>
-        <Text style={styles.envelopeAmount}>{formatAmount(amount)}</Text>
-      </TouchableOpacity>
-    );
+  const handleReorder = (id: string, targetIndex: number) => {
+    reorderEnvelopeTo(id, targetIndex).catch((err) => notify('Erreur', errorMessage(err)));
   };
 
   return (
@@ -78,21 +61,26 @@ export default function WaterfallScreen({ navigation }: Props) {
         )}
       </View>
 
-      <FlatList
-        data={envelopes}
-        keyExtractor={(item) => item.id}
-        renderItem={renderEnvelope}
+      <ScrollView
+        style={styles.scroll}
         contentContainerStyle={styles.list}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void handleRefresh()} />}
-        ListEmptyComponent={
-          !loading ? <Text style={styles.empty}>Aucune enveloppe pour l'instant.</Text> : null
-        }
-      />
-
-      <TouchableOpacity
-        style={styles.addButton}
-        onPress={() => navigation.navigate('EnvelopeForm', {})}
+        scrollEnabled={!dragging}
       >
+        {envelopes.length === 0 && !loading && (
+          <Text style={styles.empty}>Aucune enveloppe pour l'instant.</Text>
+        )}
+        <SiblingEnvelopeList
+          envelopes={envelopes}
+          depth={0}
+          getAmount={getAmount}
+          onReorder={handleReorder}
+          onAddChild={(parentId) => navigation.navigate('EnvelopeForm', { parentId })}
+          onEdit={(envelopeId) => navigation.navigate('EnvelopeForm', { envelopeId })}
+          onDragStateChange={setDragging}
+        />
+      </ScrollView>
+
+      <TouchableOpacity style={styles.addButton} onPress={() => navigation.navigate('EnvelopeForm', {})}>
         <Text style={styles.addButtonText}>+ Ajouter une enveloppe</Text>
       </TouchableOpacity>
 
@@ -116,18 +104,12 @@ const styles = StyleSheet.create({
   summaryLabel: { fontSize: 13, color: '#555' },
   summaryAmount: { fontSize: 24, fontWeight: '800' },
   remaining: { fontSize: 13, color: '#b45309', marginTop: 4 },
+  // Sur mobile web, un pull vers le bas en haut de la liste peut déclencher le "tirer pour
+  // actualiser" natif du navigateur (Chrome/Safari), en plus de notre propre glisser-déposer —
+  // overscrollBehaviorY le désactive au niveau CSS (sans effet sur natif/Expo Go).
+  scroll: Platform.OS === 'web' ? ({ overscrollBehaviorY: 'contain' } as object) : {},
   list: { flexGrow: 1, paddingBottom: 8 },
   empty: { textAlign: 'center', color: '#999', marginTop: 32 },
-  envelopeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#ddd',
-  },
-  envelopeLabel: { fontSize: 16, fontWeight: '600' },
-  envelopeAmount: { fontSize: 16, fontWeight: '700' },
   addButton: {
     backgroundColor: '#2563eb',
     borderRadius: 8,
