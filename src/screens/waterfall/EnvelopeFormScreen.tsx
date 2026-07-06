@@ -7,7 +7,7 @@ import type { Amount } from '@/core/waterfall/types';
 import { findEnvelope } from '@/core/waterfall/tree';
 import AmountEditor from '@/components/AmountEditor';
 import { confirmAction, errorMessage, notify } from '@/lib/alert';
-import { orderCouple } from '@/lib/couple';
+import { coupleLabels } from '@/lib/couple';
 
 type Props = NativeStackScreenProps<MainStackParamList, 'EnvelopeForm'>;
 
@@ -19,13 +19,7 @@ export default function EnvelopeFormScreen({ route, navigation }: Props) {
   const updateEnvelope = useStore((s) => s.updateEnvelope);
   const deleteEnvelope = useStore((s) => s.deleteEnvelope);
 
-  const personLabels =
-    profile && partner
-      ? (() => {
-          const { personA, personB } = orderCouple(profile, partner);
-          return { A: personA.displayName, B: personB.displayName };
-        })()
-      : { A: 'Personne A', B: 'Personne B' };
+  const personLabels = coupleLabels(profile, partner);
 
   const { envelopeId, parentId } = route.params;
   const existing = envelopeId ? findEnvelope(envelopes, envelopeId) : undefined;

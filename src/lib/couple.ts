@@ -18,3 +18,13 @@ export function coupleIncome(profile: PersonLike, partner: PersonLike): Income {
   const { personA, personB } = orderCouple(profile, partner);
   return { a: personA.netIncome, b: personB.netIncome };
 }
+
+/** Prénoms réels affichés pour le choix A/B (ex: dans AmountEditor), sans exposer "A"/"B" à l'UI. */
+export function coupleLabels(
+  profile: PersonLike | null,
+  partner: PersonLike | null
+): { A: string; B: string } {
+  if (!profile || !partner) return { A: 'Personne A', B: 'Personne B' };
+  const { personA, personB } = orderCouple(profile, partner);
+  return { A: personA.displayName, B: personB.displayName };
+}

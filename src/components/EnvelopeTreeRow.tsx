@@ -1,16 +1,35 @@
 import { useRef, useState } from 'react';
 import { Animated, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import type { Envelope } from '@/core/waterfall/types';
+import type { Amount, Envelope } from '@/core/waterfall/types';
 import { formatAmount } from '@/lib/format';
 
 const LONG_PRESS_MS = 300;
 const MOVE_CANCEL_THRESHOLD = 8; // px — au-delà, avant l'appui long, on laisse le scroll agir
 const TAP_THRESHOLD = 8; // px — en-deçà au relâché, on considère que c'était un tap
 
+export interface PersonLabels {
+  A: string;
+  B: string;
+}
+
+function describeAllocation(amount: Amount, personLabels: PersonLabels): string {
+  switch (amount.type) {
+    case 'fixed':
+      return `${formatAmount(amount.value)} fixe`;
+    case 'percent_envelope':
+      return `${amount.pct}% du revenu`;
+    case 'percent_remaining':
+      return `${amount.pct}% du reste`;
+    case 'prorata_income':
+      return `Prorata revenus (${personLabels[amount.who]})`;
+  }
+}
+
 interface ListProps {
   envelopes: Envelope[];
   depth: number;
   getAmount: (id: string) => number;
+  personLabels: PersonLabels;
   onReorder: (id: string, targetIndex: number) => void;
   onAddChild: (parentId: string) => void;
   onEdit: (envelopeId: string) => void;
@@ -54,6 +73,7 @@ export function SiblingEnvelopeList({
   envelopes,
   depth,
   getAmount,
+  personLabels,
   onReorder,
   onAddChild,
   onEdit,
@@ -136,6 +156,7 @@ export function SiblingEnvelopeList({
             isDragging={isDragging}
             dragY={dragY}
             getAmount={getAmount}
+            personLabels={personLabels}
             onReorder={onReorder}
             onAddChild={onAddChild}
             onEdit={onEdit}
@@ -156,6 +177,7 @@ interface ContainerProps {
   isDragging: boolean;
   dragY: Animated.Value;
   getAmount: (id: string) => number;
+  personLabels: PersonLabels;
   onReorder: (id: string, targetIndex: number) => void;
   onAddChild: (parentId: string) => void;
   onEdit: (envelopeId: string) => void;
@@ -170,6 +192,7 @@ function EnvelopeTreeRowContainer({
   isDragging,
   dragY,
   getAmount,
+  personLabels,
   onReorder,
   onAddChild,
   onEdit,
@@ -185,22 +208,25 @@ function EnvelopeTreeRowContainer({
       onLayout={(e) => onLayoutHeight(e.nativeEvent.layout.height)}
       style={isDragging ? [styles.dragging, { transform: [{ translateY: dragY }] }] : undefined}
     >
-      <View
-        style={[styles.row, { paddingLeft: 16 + depth * 20 }]}
-        {...panResponder.panHandlers}
-      >
-        <View style={styles.main}>
-          <Text style={styles.chevron}>{expanded ? '▾' : '▸'}</Text>
-          <Text style={styles.label} numberOfLines={1}>
-            {envelope.emoji} {envelope.label}
-          </Text>
+      <View style={[styles.row, { paddingLeft: 16 + depth * 20 }]} {...panResponder.panHandlers}>
+        <View style={styles.rowTop}>
+          <View style={styles.main}>
+            <Text style={styles.chevron}>{expanded ? '▾' : '▸'}</Text>
+            <Text style={styles.label} numberOfLines={1}>
+              {envelope.emoji} {envelope.label}
+            </Text>
+          </View>
+
+          <Text style={styles.amount}>{formatAmount(getAmount(envelope.id))}</Text>
+
+          <TouchableOpacity onPress={() => onEdit(envelope.id)} hitSlop={8}>
+            <Text style={styles.edit}>✏️</Text>
+          </TouchableOpacity>
         </View>
 
-        <Text style={styles.amount}>{formatAmount(getAmount(envelope.id))}</Text>
-
-        <TouchableOpacity onPress={() => onEdit(envelope.id)} hitSlop={8}>
-          <Text style={styles.edit}>✏️</Text>
-        </TouchableOpacity>
+        <Text style={styles.description} numberOfLines={1}>
+          {describeAllocation(envelope.allocation, personLabels)}
+        </Text>
       </View>
 
       {expanded && (
@@ -209,6 +235,7 @@ function EnvelopeTreeRowContainer({
             envelopes={envelope.children}
             depth={depth + 1}
             getAmount={getAmount}
+            personLabels={personLabels}
             onReorder={onReorder}
             onAddChild={onAddChild}
             onEdit={onEdit}
@@ -228,17 +255,15 @@ function EnvelopeTreeRowContainer({
 
 const styles = StyleSheet.create({
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 10,
     paddingRight: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#ddd',
-    gap: 8,
     // Sur web, glisser la souris sur du texte déclenche la sélection native du navigateur —
     // sans rapport avec notre geste de drag, juste un artefact visuel du navigateur à éviter.
     userSelect: 'none',
   },
+  rowTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   dragging: {
     zIndex: 10,
     elevation: 4,
@@ -253,6 +278,7 @@ const styles = StyleSheet.create({
   label: { fontSize: 16, fontWeight: '600', flexShrink: 1 },
   amount: { fontSize: 15, fontWeight: '700', marginLeft: 8 },
   edit: { fontSize: 15, marginLeft: 12 },
+  description: { fontSize: 12, color: '#888', marginLeft: 22, marginTop: 2 },
   addChild: { paddingVertical: 10 },
   addChildText: { color: '#2563eb', fontSize: 14, fontWeight: '600' },
 });

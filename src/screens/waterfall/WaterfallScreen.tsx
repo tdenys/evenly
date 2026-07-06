@@ -9,7 +9,7 @@ import { findEnvelopeResult } from '@/core/waterfall/tree';
 import { SiblingEnvelopeList } from '@/components/EnvelopeTreeRow';
 import { formatAmount } from '@/lib/format';
 import { errorMessage, notify } from '@/lib/alert';
-import { coupleIncome } from '@/lib/couple';
+import { coupleIncome, coupleLabels } from '@/lib/couple';
 
 type Props = NativeStackScreenProps<MainStackParamList, 'Waterfall'>;
 
@@ -47,6 +47,8 @@ export default function WaterfallScreen({ navigation }: Props) {
 
   const getAmount = (id: string) => findEnvelopeResult(result.envelopeResults, id)?.amount ?? 0;
 
+  const personLabels = coupleLabels(profile, partner);
+
   const handleReorder = (id: string, targetIndex: number) => {
     reorderEnvelopeTo(id, targetIndex).catch((err) => notify('Erreur', errorMessage(err)));
   };
@@ -73,6 +75,7 @@ export default function WaterfallScreen({ navigation }: Props) {
           envelopes={envelopes}
           depth={0}
           getAmount={getAmount}
+          personLabels={personLabels}
           onReorder={handleReorder}
           onAddChild={(parentId) => navigation.navigate('EnvelopeForm', { parentId })}
           onEdit={(envelopeId) => navigation.navigate('EnvelopeForm', { envelopeId })}
