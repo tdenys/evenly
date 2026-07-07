@@ -211,21 +211,27 @@ function EnvelopeTreeRowContainer({
     >
       <View style={[styles.row, { paddingLeft: 16 + depth * 20 }, !envelope.enabled && styles.rowDisabled]}>
         <TouchableOpacity style={styles.rowContent} onPress={() => setExpanded((e) => !e)}>
-          <View style={styles.rowTop}>
-            <View style={styles.main}>
-              <Text style={styles.chevron}>{expanded ? '▾' : '▸'}</Text>
-              <Text style={styles.label} numberOfLines={1}>
-                {envelope.emoji} {envelope.label}
-              </Text>
-            </View>
+          <View style={styles.rowOuter}>
+            {/* Libellé et description forment 2 lignes de même largeur (textBlock) — le montant
+                et le % sont chacun casés en bout de leur ligne, ce qui les aligne verticalement
+                sans ajouter de 3e ligne : le switch/crayon sont HORS de ce bloc, à droite,
+                partagés par les 2 lignes plutôt que dupliqués sur une ligne à eux. */}
+            <View style={styles.textBlock}>
+              <View style={styles.main}>
+                <Text style={styles.chevron}>{expanded ? '▾' : '▸'}</Text>
+                <Text style={styles.label} numberOfLines={1}>
+                  {envelope.emoji} {envelope.label}
+                </Text>
+                <Text style={styles.amount}>{formatAmount(amount)}</Text>
+              </View>
 
-            {/* Montant et % empilés dans la même colonne alignée à droite, pour que le % tombe
-                exactement sous le €, quelle que soit la largeur prise par le switch/crayon à
-                droite (sinon le % — aligné sur toute la largeur de la ligne — finit plus à
-                droite que le €, qui lui s'arrête avant le switch/crayon). */}
-            <View style={styles.amountColumn}>
-              <Text style={styles.amount}>{formatAmount(amount)}</Text>
-              {pct && <Text style={styles.pct}>{pct}</Text>}
+              <View style={styles.descriptionRow}>
+                <Text style={styles.description} numberOfLines={1}>
+                  {describeAllocation(envelope.allocation, personLabels)}
+                  {!envelope.enabled && ' · Désactivée'}
+                </Text>
+                {pct && <Text style={styles.pct}>{pct}</Text>}
+              </View>
             </View>
 
             <View
@@ -243,11 +249,6 @@ function EnvelopeTreeRowContainer({
               <Text style={styles.edit}>✏️</Text>
             </TouchableOpacity>
           </View>
-
-          <Text style={styles.description} numberOfLines={1}>
-            {describeAllocation(envelope.allocation, personLabels)}
-            {!envelope.enabled && ' · Désactivée'}
-          </Text>
         </TouchableOpacity>
 
         <View style={styles.grip} {...dragHandlers}>
@@ -317,21 +318,28 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
   },
-  // flex-start (pas 'center') : la colonne montant peut avoir 2 lignes (€ puis %) alors que le
-  // libellé/switch/crayon n'en ont qu'une — on veut aligner leurs sommets, pas les centrer par
-  // rapport à une colonne plus haute qu'eux.
-  rowTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 4 },
-  main: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  rowOuter: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  // Les 2 lignes (libellé+montant, puis description+%) partagent cette même largeur — c'est ce
+  // qui garantit que le montant et le %, chacun aligné à droite de sa ligne, tombent exactement
+  // l'un sous l'autre, sans dupliquer le switch/crayon sur une 3e ligne.
+  textBlock: { flex: 1 },
+  main: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   chevron: { width: 16, color: '#999' },
-  label: { fontSize: 16, fontWeight: '600', flexShrink: 1 },
-  amountColumn: { alignItems: 'flex-end' },
+  label: { flex: 1, fontSize: 16, fontWeight: '600', flexShrink: 1 },
   amount: { fontSize: 15, fontWeight: '700' },
-  pct: { fontSize: 12, color: '#888', marginTop: 2 },
+  descriptionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginLeft: 22,
+    marginTop: 2,
+  },
+  description: { fontSize: 12, color: '#888', flexShrink: 1 },
+  pct: { fontSize: 12, color: '#888', marginLeft: 8 },
   // Compense le fait qu'un `transform: scale` réduit l'apparence du Switch sans réduire la
   // place qu'il réserve dans le flex layout — la marge négative récupère cet espace mort.
   switchWrap: { transform: [{ scale: 0.75 }], marginHorizontal: -8 },
   edit: { fontSize: 15 },
-  description: { fontSize: 12, color: '#888', marginLeft: 22, marginTop: 2 },
   summary: { fontSize: 13, color: '#b45309', fontWeight: '600', paddingVertical: 6 },
   summaryOverflow: { color: '#dc2626' },
   addChild: { paddingVertical: 10 },
