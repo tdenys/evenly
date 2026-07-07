@@ -101,6 +101,10 @@ export default function WaterfallScreen({ navigation }: Props) {
       <TouchableOpacity style={[styles.incomeButton, styles.inset]} onPress={() => navigation.navigate('Income')}>
         <Text style={styles.incomeButtonText}>💶 Revenus</Text>
       </TouchableOpacity>
+
+      <TouchableOpacity style={[styles.incomeButton, styles.inset]} onPress={() => navigation.navigate('Payday')}>
+        <Text style={styles.incomeButtonText}>🔀 Répartition</Text>
+      </TouchableOpacity>
     </View>
   );
 }

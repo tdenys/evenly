@@ -131,7 +131,16 @@ export default function EnvelopeFormScreen({ route, navigation }: Props) {
         <Switch value={enabled} onValueChange={setEnabled} />
       </View>
 
-      <Text style={styles.label}>Financée par (Payday Flow)</Text>
+      <Text style={styles.label}>Allocation</Text>
+      <Text style={styles.availableHint}>
+        Reste disponible ici : {formatAmountWithPct(available, parentAmount)}
+      </Text>
+      <TouchableOpacity style={styles.fillButton} onPress={handleFillRemainder}>
+        <Text style={styles.fillButtonText}>Combler avec le reste</Text>
+      </TouchableOpacity>
+      <AmountEditor value={allocation} onChange={setAllocation} personLabels={personLabels} />
+
+      <Text style={styles.label}>Financée par</Text>
       <View style={styles.chips}>
         {(
           [
@@ -150,15 +159,6 @@ export default function EnvelopeFormScreen({ route, navigation }: Props) {
           </TouchableOpacity>
         ))}
       </View>
-
-      <Text style={styles.label}>Allocation</Text>
-      <Text style={styles.availableHint}>
-        Reste disponible ici : {formatAmountWithPct(available, parentAmount)}
-      </Text>
-      <TouchableOpacity style={styles.fillButton} onPress={handleFillRemainder}>
-        <Text style={styles.fillButtonText}>Combler avec le reste</Text>
-      </TouchableOpacity>
-      <AmountEditor value={allocation} onChange={setAllocation} personLabels={personLabels} />
 
       <TouchableOpacity style={styles.button} onPress={() => void handleSave()} disabled={saving}>
         <Text style={styles.buttonText}>{saving ? 'Enregistrement...' : 'Enregistrer'}</Text>

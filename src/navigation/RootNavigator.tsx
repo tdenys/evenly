@@ -7,8 +7,6 @@ import LoginScreen from '@/screens/auth/LoginScreen';
 import SignUpScreen from '@/screens/auth/SignUpScreen';
 import CreateOrJoinCoupleScreen from '@/screens/onboarding/CreateOrJoinCoupleScreen';
 import WaitingForPartnerScreen from '@/screens/onboarding/WaitingForPartnerScreen';
-import DashboardScreen from '@/screens/DashboardScreen';
-import AddExpenseScreen from '@/screens/AddExpenseScreen';
 import WaterfallScreen from '@/screens/waterfall/WaterfallScreen';
 import EnvelopeFormScreen from '@/screens/waterfall/EnvelopeFormScreen';
 import IncomeScreen from '@/screens/waterfall/IncomeScreen';
@@ -21,8 +19,6 @@ export type AuthStackParamList = {
 };
 
 export type MainStackParamList = {
-  Dashboard: undefined;
-  AddExpense: undefined;
   Waterfall: undefined;
   EnvelopeForm: { envelopeId?: string; parentId?: string };
   Income: undefined;
@@ -44,17 +40,7 @@ function AuthNavigator() {
 
 function MainNavigator() {
   return (
-    <MainStack.Navigator>
-      <MainStack.Screen
-        name="Dashboard"
-        component={DashboardScreen}
-        options={{ title: 'Budget Couple' }}
-      />
-      <MainStack.Screen
-        name="AddExpense"
-        component={AddExpenseScreen}
-        options={{ title: 'Ajouter une dépense' }}
-      />
+    <MainStack.Navigator initialRouteName="Waterfall">
       <MainStack.Screen name="Waterfall" component={WaterfallScreen} options={{ title: 'Budget' }} />
       <MainStack.Screen
         name="EnvelopeForm"
@@ -62,7 +48,7 @@ function MainNavigator() {
         options={{ title: 'Enveloppe' }}
       />
       <MainStack.Screen name="Income" component={IncomeScreen} options={{ title: 'Revenus' }} />
-      <MainStack.Screen name="Payday" component={PaydayScreen} options={{ title: 'Salaire' }} />
+      <MainStack.Screen name="Payday" component={PaydayScreen} options={{ title: 'Répartition' }} />
       <MainStack.Screen
         name="PaydayActionForm"
         component={PaydayActionFormScreen}
