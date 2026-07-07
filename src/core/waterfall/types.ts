@@ -40,6 +40,11 @@ export interface Envelope {
   // Interrupteur manuel (pas de suivi automatique de solde/objectif) : une enveloppe désactivée
   // vaut 0€ et ne consomme rien du pool, donc ce qu'elle aurait pris profite à la sœur suivante.
   enabled: boolean;
+  // Qui vire l'argent vers cette enveloppe depuis son salaire (Payday Flow) — indépendant du
+  // type d'allocation ci-dessus (ex: une enveloppe "prorata_income who:A" pourrait très bien
+  // être financée par B, l'app ne force pas la cohérence entre les deux). `null` = pas liée au
+  // payday (la plupart des enveloppes, notamment les subdivisions internes).
+  fundedBy: 'A' | 'B' | 'both' | null;
   children: Envelope[]; // sous-enveloppes, même forme, récursif
 }
 

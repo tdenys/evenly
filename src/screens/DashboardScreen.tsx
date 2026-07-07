@@ -108,6 +108,10 @@ export default function DashboardScreen({ navigation }: Props) {
         <Text style={styles.waterfallButtonText}>📊 Budget (waterfall)</Text>
       </TouchableOpacity>
 
+      <TouchableOpacity style={styles.waterfallButton} onPress={() => navigation.navigate('Payday')}>
+        <Text style={styles.waterfallButtonText}>💸 Salaire</Text>
+      </TouchableOpacity>
+
       <TouchableOpacity onPress={() => void signOut()} style={styles.signOut}>
         <Text style={styles.link}>Se déconnecter</Text>
       </TouchableOpacity>

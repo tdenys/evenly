@@ -12,6 +12,8 @@ import AddExpenseScreen from '@/screens/AddExpenseScreen';
 import WaterfallScreen from '@/screens/waterfall/WaterfallScreen';
 import EnvelopeFormScreen from '@/screens/waterfall/EnvelopeFormScreen';
 import IncomeScreen from '@/screens/waterfall/IncomeScreen';
+import PaydayScreen from '@/screens/payday/PaydayScreen';
+import PaydayActionFormScreen from '@/screens/payday/PaydayActionFormScreen';
 
 export type AuthStackParamList = {
   Login: undefined;
@@ -24,6 +26,8 @@ export type MainStackParamList = {
   Waterfall: undefined;
   EnvelopeForm: { envelopeId?: string; parentId?: string };
   Income: undefined;
+  Payday: undefined;
+  PaydayActionForm: { actionId?: string; ownerId: string };
 };
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -58,6 +62,12 @@ function MainNavigator() {
         options={{ title: 'Enveloppe' }}
       />
       <MainStack.Screen name="Income" component={IncomeScreen} options={{ title: 'Revenus' }} />
+      <MainStack.Screen name="Payday" component={PaydayScreen} options={{ title: 'Salaire' }} />
+      <MainStack.Screen
+        name="PaydayActionForm"
+        component={PaydayActionFormScreen}
+        options={{ title: 'Action' }}
+      />
     </MainStack.Navigator>
   );
 }

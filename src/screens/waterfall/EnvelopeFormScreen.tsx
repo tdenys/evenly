@@ -54,6 +54,7 @@ export default function EnvelopeFormScreen({ route, navigation }: Props) {
     existing?.allocation ?? { type: 'percent_envelope', pct: 0 }
   );
   const [enabled, setEnabled] = useState(existing?.enabled ?? true);
+  const [fundedBy, setFundedBy] = useState<'A' | 'B' | 'both' | null>(existing?.fundedBy ?? null);
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -69,7 +70,14 @@ export default function EnvelopeFormScreen({ route, navigation }: Props) {
 
     setSaving(true);
     try {
-      const input = { label: label.trim(), emoji: emoji.trim() || '💰', priority: parsedPriority, allocation, enabled };
+      const input = {
+        label: label.trim(),
+        emoji: emoji.trim() || '💰',
+        priority: parsedPriority,
+        allocation,
+        enabled,
+        fundedBy,
+      };
       if (existing) {
         await updateEnvelope(existing.id, input);
       } else {
@@ -123,6 +131,26 @@ export default function EnvelopeFormScreen({ route, navigation }: Props) {
         <Switch value={enabled} onValueChange={setEnabled} />
       </View>
 
+      <Text style={styles.label}>Financée par (Payday Flow)</Text>
+      <View style={styles.chips}>
+        {(
+          [
+            [null, 'Aucun'],
+            ['A', personLabels.A],
+            ['B', personLabels.B],
+            ['both', 'Les deux'],
+          ] as const
+        ).map(([value, chipLabel]) => (
+          <TouchableOpacity
+            key={chipLabel}
+            style={[styles.chip, fundedBy === value && styles.chipSelected]}
+            onPress={() => setFundedBy(value)}
+          >
+            <Text style={[styles.chipText, fundedBy === value && styles.chipTextSelected]}>{chipLabel}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
       <Text style={styles.label}>Allocation</Text>
       <Text style={styles.availableHint}>
         Reste disponible ici : {formatAmountWithPct(available, parentAmount)}
@@ -169,6 +197,17 @@ const styles = StyleSheet.create({
   },
   availableHint: { fontSize: 13, color: '#b45309', marginBottom: 8 },
   enabledRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  chipSelected: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
+  chipText: { color: '#333' },
+  chipTextSelected: { color: '#fff', fontWeight: '600' },
   fillButton: {
     borderWidth: 1,
     borderColor: '#2563eb',

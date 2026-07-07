@@ -229,3 +229,38 @@ end;
 $$;
 
 grant execute on function update_partner_income(numeric) to authenticated;
+
+-- ============================================================
+-- V2 — Payday Flow (dispatch de salaire)
+-- ============================================================
+
+create table payday_actions (
+  id uuid primary key default gen_random_uuid(),
+  couple_id uuid not null references couples(id),
+  owner uuid not null references profiles(id), -- de qui est ce salaire
+  label text not null,
+  priority int not null,
+  amount jsonb not null, -- sérialisation directe de PaydayAmount (src/core/payday/types.ts)
+  created_at timestamptz not null default now()
+);
+
+alter table payday_actions enable row level security;
+
+-- Policies larges comme envelopes : n'importe quel membre du couple peut gérer les actions des
+-- deux personnes (cohérent avec update_partner_income ci-dessus).
+create policy "select couple payday actions" on payday_actions
+  for select to authenticated using (couple_id = auth_couple_id());
+create policy "insert couple payday actions" on payday_actions
+  for insert to authenticated with check (couple_id = auth_couple_id());
+create policy "update couple payday actions" on payday_actions
+  for update to authenticated using (couple_id = auth_couple_id());
+create policy "delete couple payday actions" on payday_actions
+  for delete to authenticated using (couple_id = auth_couple_id());
+
+grant select, insert, update, delete on payday_actions to authenticated;
+
+-- ============================================================
+-- V2 — Lier une enveloppe au Payday Flow ("financée par")
+-- ============================================================
+
+alter table envelopes add column funded_by text; -- 'A' | 'B' | 'both' | null

@@ -4,6 +4,10 @@ import { supabase } from '@/lib/supabase';
 import { calculateBalance, type Balance } from '@/core/balance/calculateBalance';
 import type { Amount, Envelope } from '@/core/waterfall/types';
 import { findSiblings } from '@/core/waterfall/tree';
+import type { PaydayAction, PaydayAmount } from '@/core/payday/types';
+import { orderCouple } from '@/lib/couple';
+
+export type PaydayActionRow = PaydayAction & { ownerId: string };
 
 export interface Profile {
   id: string;
@@ -44,6 +48,7 @@ interface StoreState {
   expenses: Expense[];
   settlements: Settlement[];
   envelopes: Envelope[];
+  paydayActions: PaydayActionRow[];
   error: string | null;
 
   init: () => void;
@@ -65,15 +70,36 @@ interface StoreState {
     priority: number;
     allocation: Amount;
     enabled: boolean;
+    fundedBy: 'A' | 'B' | 'both' | null;
     parentId: string | null;
   }) => Promise<void>;
   updateEnvelope: (
     id: string,
-    input: { label: string; emoji: string; priority: number; allocation: Amount; enabled: boolean }
+    input: {
+      label: string;
+      emoji: string;
+      priority: number;
+      allocation: Amount;
+      enabled: boolean;
+      fundedBy: 'A' | 'B' | 'both' | null;
+    }
   ) => Promise<void>;
   deleteEnvelope: (id: string) => Promise<void>;
   reorderEnvelopeTo: (id: string, targetIndex: number) => Promise<void>;
   setEnvelopeEnabled: (id: string, enabled: boolean) => Promise<void>;
+  loadPaydayActions: () => Promise<void>;
+  createPaydayAction: (input: {
+    ownerId: string;
+    label: string;
+    priority: number;
+    amount: PaydayAmount;
+  }) => Promise<void>;
+  updatePaydayAction: (
+    id: string,
+    input: { ownerId: string; label: string; priority: number; amount: PaydayAmount }
+  ) => Promise<void>;
+  deletePaydayAction: (id: string) => Promise<void>;
+  reorderPaydayActionTo: (id: string, targetIndex: number) => Promise<void>;
 }
 
 let realtimeChannel: RealtimeChannel | null = null;
@@ -103,6 +129,7 @@ export const useStore = create<StoreState>((set, get) => ({
   expenses: [],
   settlements: [],
   envelopes: [],
+  paydayActions: [],
   error: null,
 
   init: () => {
@@ -117,6 +144,7 @@ export const useStore = create<StoreState>((set, get) => ({
           expenses: [],
           settlements: [],
           envelopes: [],
+          paydayActions: [],
         });
         return;
       }
@@ -262,7 +290,7 @@ export const useStore = create<StoreState>((set, get) => ({
 
     const { data, error } = await supabase
       .from('envelopes')
-      .select('id, parent_id, label, emoji, priority, allocation, enabled')
+      .select('id, parent_id, label, emoji, priority, allocation, enabled, funded_by')
       .eq('couple_id', couple.id)
       .order('priority', { ascending: true });
     if (error) throw error;
@@ -282,6 +310,7 @@ export const useStore = create<StoreState>((set, get) => ({
         priority: row.priority,
         allocation: row.allocation as Amount,
         enabled: row.enabled,
+        fundedBy: row.funded_by as 'A' | 'B' | 'both' | null,
         children: build(row.id),
       }));
 
@@ -292,18 +321,24 @@ export const useStore = create<StoreState>((set, get) => ({
     const { couple } = get();
     if (!couple) throw new Error('Aucun couple actif.');
 
-    const { error } = await supabase.from('envelopes').insert({
-      couple_id: couple.id,
-      parent_id: input.parentId,
-      label: input.label,
-      emoji: input.emoji,
-      priority: input.priority,
-      allocation: input.allocation,
-      enabled: input.enabled,
-    });
+    const { data, error } = await supabase
+      .from('envelopes')
+      .insert({
+        couple_id: couple.id,
+        parent_id: input.parentId,
+        label: input.label,
+        emoji: input.emoji,
+        priority: input.priority,
+        allocation: input.allocation,
+        enabled: input.enabled,
+        funded_by: input.fundedBy,
+      })
+      .select('id')
+      .single();
     if (error) throw error;
 
     await get().loadEnvelopes();
+    await syncPaydayActionsForEnvelope(data.id, input.fundedBy, input.label, input.emoji, get);
   },
 
   updateEnvelope: async (id, input) => {
@@ -315,18 +350,30 @@ export const useStore = create<StoreState>((set, get) => ({
         priority: input.priority,
         allocation: input.allocation,
         enabled: input.enabled,
+        funded_by: input.fundedBy,
       })
       .eq('id', id);
     if (error) throw error;
 
     await get().loadEnvelopes();
+    await syncPaydayActionsForEnvelope(id, input.fundedBy, input.label, input.emoji, get);
   },
 
   deleteEnvelope: async (id) => {
+    // Nettoie d'abord les actions payday liées (référence vivante — une action pointant vers
+    // une enveloppe supprimée n'a plus de sens), sur un état payday_actions frais (l'utilisateur
+    // n'a peut-être jamais ouvert l'onglet Salaire cette session).
+    await get().loadPaydayActions();
+    const linked = get().paydayActions.filter(
+      (a) => a.amount.type === 'envelope' && a.amount.envelopeId === id
+    );
+    await Promise.all(linked.map((a) => supabase.from('payday_actions').delete().eq('id', a.id)));
+
     const { error } = await supabase.from('envelopes').delete().eq('id', id);
     if (error) throw error;
 
     await get().loadEnvelopes();
+    if (linked.length > 0) await get().loadPaydayActions();
   },
 
   setEnvelopeEnabled: async (id, enabled) => {
@@ -361,7 +408,148 @@ export const useStore = create<StoreState>((set, get) => ({
 
     await get().loadEnvelopes();
   },
+
+  loadPaydayActions: async () => {
+    const { couple } = get();
+    if (!couple) return;
+
+    const { data, error } = await supabase
+      .from('payday_actions')
+      .select('id, owner, label, priority, amount')
+      .eq('couple_id', couple.id)
+      .order('priority', { ascending: true });
+    if (error) throw error;
+
+    const paydayActions: PaydayActionRow[] = (data ?? []).map((row) => ({
+      id: row.id,
+      ownerId: row.owner,
+      label: row.label,
+      priority: row.priority,
+      amount: row.amount as PaydayAmount,
+    }));
+
+    set({ paydayActions });
+  },
+
+  createPaydayAction: async (input) => {
+    const { couple } = get();
+    if (!couple) throw new Error('Aucun couple actif.');
+
+    const { error } = await supabase.from('payday_actions').insert({
+      couple_id: couple.id,
+      owner: input.ownerId,
+      label: input.label,
+      priority: input.priority,
+      amount: input.amount,
+    });
+    if (error) throw error;
+
+    await get().loadPaydayActions();
+  },
+
+  updatePaydayAction: async (id, input) => {
+    const { error } = await supabase
+      .from('payday_actions')
+      .update({
+        owner: input.ownerId,
+        label: input.label,
+        priority: input.priority,
+        amount: input.amount,
+      })
+      .eq('id', id);
+    if (error) throw error;
+
+    await get().loadPaydayActions();
+  },
+
+  deletePaydayAction: async (id) => {
+    const { error } = await supabase.from('payday_actions').delete().eq('id', id);
+    if (error) throw error;
+
+    await get().loadPaydayActions();
+  },
+
+  reorderPaydayActionTo: async (id, targetIndex) => {
+    const { paydayActions } = get();
+    const moving = paydayActions.find((a) => a.id === id);
+    if (!moving) return;
+
+    const siblings = paydayActions.filter((a) => a.ownerId === moving.ownerId);
+    const currentIndex = siblings.findIndex((a) => a.id === id);
+    if (currentIndex === -1 || currentIndex === targetIndex) return;
+
+    const reordered = [...siblings];
+    const [moved] = reordered.splice(currentIndex, 1);
+    reordered.splice(targetIndex, 0, moved);
+
+    const results = await Promise.all(
+      reordered.map((action, index) =>
+        supabase.from('payday_actions').update({ priority: index + 1 }).eq('id', action.id)
+      )
+    );
+    const firstError = results.find((r) => r.error)?.error;
+    if (firstError) throw firstError;
+
+    await get().loadPaydayActions();
+  },
 }));
+
+/** Réconcilie les payday_actions "référence vivante" (amount.type === 'envelope') d'une
+ * enveloppe avec son `fundedBy` actuel — crée/supprime des lignes selon les personnes
+ * attendues, mais ne touche jamais au montant (toujours recalculé à l'affichage, jamais copié
+ * ici). Appelée après chaque save d'enveloppe (create/update) dans useStore.ts. */
+async function syncPaydayActionsForEnvelope(
+  envelopeId: string,
+  fundedBy: 'A' | 'B' | 'both' | null,
+  label: string,
+  emoji: string,
+  get: () => StoreState
+) {
+  const { profile, partner, couple } = get();
+  if (!profile || !partner || !couple) return;
+
+  // Repart d'un état payday_actions frais : l'utilisateur n'a peut-être jamais ouvert l'onglet
+  // Salaire cette session, un état local vide ferait croire à tort qu'aucune action n'existe.
+  await get().loadPaydayActions();
+  const { paydayActions } = get();
+
+  const { personA, personB } = orderCouple(profile, partner);
+  const expectedOwnerIds =
+    fundedBy === 'A'
+      ? [personA.id]
+      : fundedBy === 'B'
+        ? [personB.id]
+        : fundedBy === 'both'
+          ? [personA.id, personB.id]
+          : [];
+
+  const linked = paydayActions.filter(
+    (a) => a.amount.type === 'envelope' && a.amount.envelopeId === envelopeId
+  );
+
+  const toDelete = linked.filter((a) => !expectedOwnerIds.includes(a.ownerId));
+  const existingOwnerIds = new Set(linked.map((a) => a.ownerId));
+  const toCreateOwnerIds = expectedOwnerIds.filter((ownerId) => !existingOwnerIds.has(ownerId));
+
+  await Promise.all([
+    ...toDelete.map((a) => supabase.from('payday_actions').delete().eq('id', a.id)),
+    ...toCreateOwnerIds.map((ownerId) => {
+      const ownerActions = paydayActions.filter((a) => a.ownerId === ownerId);
+      const nextPriority = ownerActions.length > 0 ? Math.max(...ownerActions.map((a) => a.priority)) + 1 : 1;
+      return supabase.from('payday_actions').insert({
+        couple_id: couple.id,
+        owner: ownerId,
+        label: `${emoji} ${label}`,
+        priority: nextPriority,
+        amount: { type: 'envelope', envelopeId },
+      });
+    }),
+  ]);
+
+  if (toDelete.length > 0 || toCreateOwnerIds.length > 0) {
+    await get().loadPaydayActions();
+  }
+}
 
 async function loadCoupleData(
   userId: string,

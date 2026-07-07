@@ -9,6 +9,19 @@ export interface PersonLabels {
   B: string;
 }
 
+function describeFundedBy(fundedBy: Envelope['fundedBy'], personLabels: PersonLabels): string | null {
+  switch (fundedBy) {
+    case 'A':
+      return `💸 ${personLabels.A}`;
+    case 'B':
+      return `💸 ${personLabels.B}`;
+    case 'both':
+      return `💸 ${personLabels.A} + ${personLabels.B}`;
+    case null:
+      return null;
+  }
+}
+
 function describeAllocation(amount: Amount, personLabels: PersonLabels): string {
   switch (amount.type) {
     case 'fixed':
@@ -203,6 +216,7 @@ function EnvelopeTreeRowContainer({
   const amount = result?.amount ?? 0;
   const pct = formatPct(amount, parentAmount);
   const summary = expanded ? describeChildrenSummary(amount, result?.children ?? []) : null;
+  const fundedByText = describeFundedBy(envelope.fundedBy, personLabels);
 
   return (
     <Animated.View
@@ -228,6 +242,7 @@ function EnvelopeTreeRowContainer({
               <View style={styles.descriptionRow}>
                 <Text style={styles.description} numberOfLines={1}>
                   {describeAllocation(envelope.allocation, personLabels)}
+                  {fundedByText && ` · ${fundedByText}`}
                   {!envelope.enabled && ' · Désactivée'}
                 </Text>
                 {pct && <Text style={styles.pct}>{pct}</Text>}

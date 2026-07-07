@@ -9,6 +9,7 @@ function env(overrides: Partial<Envelope> & Pick<Envelope, 'id' | 'allocation'>)
     emoji: '📦',
     priority: 1,
     enabled: true,
+    fundedBy: null,
     children: [],
     ...overrides,
   };
