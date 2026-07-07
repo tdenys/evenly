@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { MainStackParamList } from '@/navigation/RootNavigator';
 import { useStore } from '@/store/useStore';
@@ -103,7 +103,7 @@ export default function EnvelopeFormScreen({ route, navigation }: Props) {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Text style={styles.label}>Emoji</Text>
       <TextInput style={styles.emojiInput} value={emoji} onChangeText={setEmoji} maxLength={2} />
 
@@ -141,12 +141,15 @@ export default function EnvelopeFormScreen({ route, navigation }: Props) {
           <Text style={styles.deleteButtonText}>Supprimer l'enveloppe</Text>
         </TouchableOpacity>
       )}
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, gap: 8 },
+  container: { flex: 1 },
+  // paddingBottom généreux : sans ça, le bouton "Enregistrer"/"Supprimer" reste collé sous le
+  // clavier ou en toute fin de scroll, difficile à atteindre sur mobile.
+  content: { padding: 20, gap: 8, paddingBottom: 48 },
   label: { fontSize: 14, fontWeight: '600', color: '#555', marginTop: 12, marginBottom: 6 },
   input: {
     borderWidth: 1,

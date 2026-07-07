@@ -199,3 +199,33 @@ alter table envelopes add column parent_id uuid references envelopes(id) on dele
 -- ============================================================
 
 alter table envelopes add column enabled boolean not null default true;
+
+-- ============================================================
+-- V2 — Modifier le revenu du/de la partenaire (les 2 salaires éditables
+-- depuis n'importe quel compte)
+-- ============================================================
+
+-- security definer : la policy "update own profile" n'autorise que id = auth.uid(), et on ne
+-- veut pas l'élargir à toute la ligne du/de la partenaire (label, couple_id...) juste pour ce
+-- besoin — cette fonction ne touche donc que la colonne net_income, et seulement pour le/la
+-- partenaire du même couple que l'appelant.
+create function update_partner_income(p_net_income numeric)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_couple_id uuid;
+begin
+  select couple_id into v_couple_id from profiles where id = auth.uid();
+  if v_couple_id is null then
+    raise exception 'not in a couple';
+  end if;
+
+  update profiles set net_income = p_net_income
+  where couple_id = v_couple_id and id <> auth.uid();
+end;
+$$;
+
+grant execute on function update_partner_income(numeric) to authenticated;

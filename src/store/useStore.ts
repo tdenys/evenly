@@ -57,6 +57,7 @@ interface StoreState {
   refresh: () => Promise<void>;
   balance: () => Balance | null;
   updateMyIncome: (netIncome: number) => Promise<void>;
+  updatePartnerIncome: (netIncome: number) => Promise<void>;
   loadEnvelopes: () => Promise<void>;
   createEnvelope: (input: {
     label: string;
@@ -240,6 +241,16 @@ export const useStore = create<StoreState>((set, get) => ({
     if (!profile) throw new Error('Profil introuvable.');
 
     const { error } = await supabase.from('profiles').update({ net_income: netIncome }).eq('id', profile.id);
+    if (error) throw error;
+
+    await get().refresh();
+  },
+
+  updatePartnerIncome: async (netIncome: number) => {
+    // La policy RLS "update own profile" n'autorise que id = auth.uid() — modifier le revenu
+    // du/de la partenaire passe donc par le RPC security definer update_partner_income (voir
+    // supabase/migration.sql), qui ne touche que sa colonne net_income.
+    const { error } = await supabase.rpc('update_partner_income', { p_net_income: netIncome });
     if (error) throw error;
 
     await get().refresh();
