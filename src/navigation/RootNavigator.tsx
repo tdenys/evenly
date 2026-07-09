@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { createNavigationContainerRef, NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useStore } from '@/store/useStore';
 import LoginScreen from '@/screens/auth/LoginScreen';
@@ -28,6 +28,11 @@ export type MainStackParamList = {
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const MainStack = createNativeStackNavigator<MainStackParamList>();
+
+// Permet de naviguer depuis en dehors de l'arbre React (ex: au tap sur une notification, voir
+// App.tsx) — reflète le navigateur actuellement monté (Auth ou Main selon `status`), donc un
+// `.navigate('Payday')` n'a de sens que si MainNavigator est affiché (statut "ready").
+export const navigationRef = createNavigationContainerRef<MainStackParamList>();
 
 function AuthNavigator() {
   return (
@@ -75,7 +80,7 @@ export function RootNavigator() {
   }, [init]);
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       {status === 'loading' && <LoadingScreen />}
       {status === 'signedOut' && <AuthNavigator />}
       {status === 'needsCouple' && <CreateOrJoinCoupleScreen />}

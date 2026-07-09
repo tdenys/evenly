@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import type { MainStackParamList } from '@/navigation/RootNavigator';
@@ -12,6 +12,13 @@ import { findEnvelope, findEnvelopeResult } from '@/core/waterfall/tree';
 import { coupleIncome, orderCouple } from '@/lib/couple';
 import { formatAmountWithPct } from '@/lib/format';
 import { errorMessage, notify } from '@/lib/alert';
+import {
+  cancelPaydayReminder,
+  getNotificationPermissionGranted,
+  requestNotificationPermission,
+  schedulePaydayReminder,
+  sendTestNotification,
+} from '@/lib/notifications';
 
 type Props = NativeStackScreenProps<MainStackParamList, 'Payday'>;
 
@@ -53,6 +60,9 @@ export default function PaydayScreen({ navigation }: Props) {
   // les montants sont modifiables à la main sans changer la règle permanente. N'existe pas pour
   // les actions liées à une enveloppe (montant en lecture seule, dérivé de Waterfall).
   const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [paydayDayText, setPaydayDayText] = useState('');
+  const [savingDay, setSavingDay] = useState(false);
+  const updateMyPaydayDay = useStore((s) => s.updateMyPaydayDay);
 
   useFocusEffect(
     useCallback(() => {
@@ -62,6 +72,59 @@ export default function PaydayScreen({ navigation }: Props) {
         .finally(() => setLoading(false));
     }, [loadEnvelopes, loadPaydayActions, refresh])
   );
+
+  // Reprogramme silencieusement le rappel local si le jour enregistré a changé ailleurs (ex:
+  // après réinstallation de l'app) — seulement si la permission est déjà accordée, sans jamais
+  // la demander automatiquement (ça doit toujours venir d'une action explicite).
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS === 'web' || !profile?.paydayDay) return;
+      getNotificationPermissionGranted().then((granted) => {
+        if (granted && profile.paydayDay) void schedulePaydayReminder(profile.paydayDay);
+      });
+    }, [profile?.paydayDay])
+  );
+
+  useEffect(() => {
+    setPaydayDayText(profile?.paydayDay ? String(profile.paydayDay) : '');
+  }, [profile?.paydayDay]);
+
+  const handleSavePaydayDay = async () => {
+    const trimmed = paydayDayText.trim();
+    const parsed = trimmed === '' ? null : Number(trimmed);
+    if (parsed !== null && (!Number.isInteger(parsed) || parsed < 1 || parsed > 31)) {
+      notify('Jour invalide', 'Renseigne un jour entre 1 et 31, ou laisse vide.');
+      return;
+    }
+    setSavingDay(true);
+    try {
+      await updateMyPaydayDay(parsed);
+      if (parsed === null) {
+        await cancelPaydayReminder();
+      } else {
+        const granted = await requestNotificationPermission();
+        if (granted) {
+          await schedulePaydayReminder(parsed);
+        } else {
+          notify('Permission refusée', "Le rappel ne pourra pas se déclencher sans autorisation de notification.");
+        }
+      }
+      notify('Enregistré', parsed ? 'Rappel programmé chaque mois.' : 'Rappel désactivé.');
+    } catch (err) {
+      notify('Erreur', errorMessage(err));
+    } finally {
+      setSavingDay(false);
+    }
+  };
+
+  const handleTestNotification = async () => {
+    const granted = await requestNotificationPermission();
+    if (!granted) {
+      notify('Permission refusée', 'Autorise les notifications pour tester le rappel.');
+      return;
+    }
+    await sendTestNotification();
+  };
 
   const effectiveOwnerId = viewedOwnerId ?? profile?.id ?? null;
   const viewedNetIncome = effectiveOwnerId === partner?.id ? (partner?.netIncome ?? 0) : (profile?.netIncome ?? 0);
@@ -197,6 +260,31 @@ export default function PaydayScreen({ navigation }: Props) {
         </TouchableOpacity>
       </View>
 
+      {Platform.OS !== 'web' && effectiveOwnerId === profile?.id && (
+        <View style={styles.reminderBlock}>
+          <Text style={styles.label}>Jour de versement (1-31)</Text>
+          <View style={styles.reminderRow}>
+            <TextInput
+              style={styles.dayInput}
+              keyboardType="number-pad"
+              placeholder="ex: 28"
+              value={paydayDayText}
+              onChangeText={setPaydayDayText}
+            />
+            <TouchableOpacity
+              style={styles.reminderButton}
+              onPress={() => void handleSavePaydayDay()}
+              disabled={savingDay}
+            >
+              <Text style={styles.reminderButtonText}>{savingDay ? '...' : 'Enregistrer'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.reminderButton} onPress={() => void handleTestNotification()}>
+              <Text style={styles.reminderButtonText}>🔔 Tester</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       <Text style={styles.label}>Montant du salaire</Text>
       <TextInput style={styles.salaryInput} keyboardType="decimal-pad" value={salaryText} onChangeText={setSalaryText} />
 
@@ -269,6 +357,24 @@ const styles = StyleSheet.create({
   tabText: { color: '#2563eb', fontWeight: '600', fontSize: 13 },
   tabTextSelected: { color: '#fff' },
   label: { fontSize: 14, fontWeight: '600', color: '#555', marginBottom: 6 },
+  reminderBlock: { marginBottom: 16 },
+  reminderRow: { flexDirection: 'row', gap: 8 },
+  dayInput: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 15,
+    width: 70,
+  },
+  reminderButton: {
+    borderWidth: 1,
+    borderColor: '#2563eb',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+  },
+  reminderButtonText: { color: '#2563eb', fontSize: 13, fontWeight: '600' },
   salaryInput: {
     borderWidth: 1,
     borderColor: '#ccc',

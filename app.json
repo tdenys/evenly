@@ -16,13 +16,24 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.tiden.budgetcouple"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "experiments": {
       "tsconfigPaths": true
+    },
+    "plugins": [
+      [
+        "expo-notifications"
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ef837f0e-aec2-484f-9019-2f677c0100cb"
+      }
     }
   }
 }

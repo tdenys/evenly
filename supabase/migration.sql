@@ -264,3 +264,9 @@ grant select, insert, update, delete on payday_actions to authenticated;
 -- ============================================================
 
 alter table envelopes add column funded_by text; -- 'A' | 'B' | 'both' | null
+
+-- ============================================================
+-- V2 — Rappel de versement (notification locale mensuelle)
+-- ============================================================
+
+alter table profiles add column payday_day integer check (payday_day between 1 and 31);

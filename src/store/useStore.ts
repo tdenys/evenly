@@ -12,6 +12,7 @@ export interface Profile {
   displayName: string;
   coupleId: string | null;
   netIncome: number;
+  paydayDay: number | null;
 }
 
 export interface Couple {
@@ -39,6 +40,7 @@ interface StoreState {
   refresh: () => Promise<void>;
   updateMyIncome: (netIncome: number) => Promise<void>;
   updatePartnerIncome: (netIncome: number) => Promise<void>;
+  updateMyPaydayDay: (day: number | null) => Promise<void>;
   loadEnvelopes: () => Promise<void>;
   createEnvelope: (input: {
     label: string;
@@ -192,6 +194,16 @@ export const useStore = create<StoreState>((set, get) => ({
     // du/de la partenaire passe donc par le RPC security definer update_partner_income (voir
     // supabase/migration.sql), qui ne touche que sa colonne net_income.
     const { error } = await supabase.rpc('update_partner_income', { p_net_income: netIncome });
+    if (error) throw error;
+
+    await get().refresh();
+  },
+
+  updateMyPaydayDay: async (day: number | null) => {
+    const { profile } = get();
+    if (!profile) throw new Error('Profil introuvable.');
+
+    const { error } = await supabase.from('profiles').update({ payday_day: day }).eq('id', profile.id);
     if (error) throw error;
 
     await get().refresh();
@@ -471,7 +483,7 @@ async function loadCoupleData(
 ) {
   const { data: profileRow, error: profileError } = await supabase
     .from('profiles')
-    .select('id, display_name, couple_id, net_income')
+    .select('id, display_name, couple_id, net_income, payday_day')
     .eq('id', userId)
     .single();
   if (profileError) {
@@ -484,6 +496,7 @@ async function loadCoupleData(
     displayName: profileRow.display_name,
     coupleId: profileRow.couple_id,
     netIncome: Number(profileRow.net_income),
+    paydayDay: profileRow.payday_day,
   };
 
   if (!profile.coupleId) {
@@ -504,7 +517,7 @@ async function loadCoupleData(
 
   const { data: partnerRow } = await supabase
     .from('profiles')
-    .select('id, display_name, couple_id, net_income')
+    .select('id, display_name, couple_id, net_income, payday_day')
     .eq('couple_id', couple.id)
     .neq('id', userId)
     .maybeSingle();
@@ -514,6 +527,7 @@ async function loadCoupleData(
         displayName: partnerRow.display_name,
         coupleId: partnerRow.couple_id,
         netIncome: Number(partnerRow.net_income),
+        paydayDay: partnerRow.payday_day,
       }
     : null;
 
