@@ -2,7 +2,7 @@ import { runPayday } from './engine';
 import type { PaydayAction } from './types';
 
 function action(overrides: Partial<PaydayAction> & Pick<PaydayAction, 'id' | 'priority' | 'amount'>): PaydayAction {
-  return { label: overrides.id, ...overrides };
+  return { label: overrides.id, description: '', ...overrides };
 }
 
 describe('runPayday — exemple CLAUDE.md', () => {

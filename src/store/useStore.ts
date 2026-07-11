@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import type { Amount, Envelope } from '@/core/waterfall/types';
 import { findSiblings } from '@/core/waterfall/tree';
 import type { PaydayAction, PaydayAmount } from '@/core/payday/types';
+import type { Subscription, SubscriptionFrequency } from '@/core/subscriptions/types';
 import { orderCouple } from '@/lib/couple';
 
 export type PaydayActionRow = PaydayAction & { ownerId: string };
@@ -29,6 +30,7 @@ interface StoreState {
   couple: Couple | null;
   envelopes: Envelope[];
   paydayActions: PaydayActionRow[];
+  subscriptions: Subscription[];
   error: string | null;
 
   init: () => void;
@@ -41,6 +43,7 @@ interface StoreState {
   updateMyIncome: (netIncome: number) => Promise<void>;
   updatePartnerIncome: (netIncome: number) => Promise<void>;
   updateMyPaydayDay: (day: number | null) => Promise<void>;
+  updatePartnerPaydayDay: (day: number | null) => Promise<void>;
   loadEnvelopes: () => Promise<void>;
   createEnvelope: (input: {
     label: string;
@@ -69,15 +72,35 @@ interface StoreState {
   createPaydayAction: (input: {
     ownerId: string;
     label: string;
+    description: string;
     priority: number;
     amount: PaydayAmount;
   }) => Promise<void>;
   updatePaydayAction: (
     id: string,
-    input: { ownerId: string; label: string; priority: number; amount: PaydayAmount }
+    input: { ownerId: string; label: string; description: string; priority: number; amount: PaydayAmount }
   ) => Promise<void>;
   deletePaydayAction: (id: string) => Promise<void>;
   reorderPaydayActionTo: (id: string, targetIndex: number) => Promise<void>;
+  loadSubscriptions: () => Promise<void>;
+  createSubscription: (input: {
+    title: string;
+    cost: number;
+    frequency: SubscriptionFrequency;
+    category: string;
+    assignedTo: 'A' | 'B' | 'both';
+  }) => Promise<void>;
+  updateSubscription: (
+    id: string,
+    input: {
+      title: string;
+      cost: number;
+      frequency: SubscriptionFrequency;
+      category: string;
+      assignedTo: 'A' | 'B' | 'both';
+    }
+  ) => Promise<void>;
+  deleteSubscription: (id: string) => Promise<void>;
 }
 
 const INVITE_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -97,6 +120,7 @@ export const useStore = create<StoreState>((set, get) => ({
   couple: null,
   envelopes: [],
   paydayActions: [],
+  subscriptions: [],
   error: null,
 
   init: () => {
@@ -109,6 +133,7 @@ export const useStore = create<StoreState>((set, get) => ({
           couple: null,
           envelopes: [],
           paydayActions: [],
+          subscriptions: [],
         });
         return;
       }
@@ -204,6 +229,16 @@ export const useStore = create<StoreState>((set, get) => ({
     if (!profile) throw new Error('Profil introuvable.');
 
     const { error } = await supabase.from('profiles').update({ payday_day: day }).eq('id', profile.id);
+    if (error) throw error;
+
+    await get().refresh();
+  },
+
+  updatePartnerPaydayDay: async (day: number | null) => {
+    // Même principe que updatePartnerIncome : passe par le RPC security definer
+    // update_partner_payday_day (voir supabase/migration.sql), la policy RLS "update own
+    // profile" n'autorisant que id = auth.uid().
+    const { error } = await supabase.rpc('update_partner_payday_day', { p_payday_day: day });
     if (error) throw error;
 
     await get().refresh();
@@ -340,7 +375,7 @@ export const useStore = create<StoreState>((set, get) => ({
 
     const { data, error } = await supabase
       .from('payday_actions')
-      .select('id, owner, label, priority, amount')
+      .select('id, owner, label, description, priority, amount')
       .eq('couple_id', couple.id)
       .order('priority', { ascending: true });
     if (error) throw error;
@@ -349,6 +384,7 @@ export const useStore = create<StoreState>((set, get) => ({
       id: row.id,
       ownerId: row.owner,
       label: row.label,
+      description: row.description,
       priority: row.priority,
       amount: row.amount as PaydayAmount,
     }));
@@ -364,6 +400,7 @@ export const useStore = create<StoreState>((set, get) => ({
       couple_id: couple.id,
       owner: input.ownerId,
       label: input.label,
+      description: input.description,
       priority: input.priority,
       amount: input.amount,
     });
@@ -378,6 +415,7 @@ export const useStore = create<StoreState>((set, get) => ({
       .update({
         owner: input.ownerId,
         label: input.label,
+        description: input.description,
         priority: input.priority,
         amount: input.amount,
       })
@@ -416,6 +454,69 @@ export const useStore = create<StoreState>((set, get) => ({
     if (firstError) throw firstError;
 
     await get().loadPaydayActions();
+  },
+
+  loadSubscriptions: async () => {
+    const { couple } = get();
+    if (!couple) return;
+
+    const { data, error } = await supabase
+      .from('subscriptions')
+      .select('id, title, cost, frequency, category, assigned_to')
+      .eq('couple_id', couple.id)
+      .order('title', { ascending: true });
+    if (error) throw error;
+
+    const subscriptions: Subscription[] = (data ?? []).map((row) => ({
+      id: row.id,
+      title: row.title,
+      cost: Number(row.cost),
+      frequency: row.frequency as SubscriptionFrequency,
+      category: row.category,
+      assignedTo: row.assigned_to as 'A' | 'B' | 'both',
+    }));
+
+    set({ subscriptions });
+  },
+
+  createSubscription: async (input) => {
+    const { couple } = get();
+    if (!couple) throw new Error('Aucun couple actif.');
+
+    const { error } = await supabase.from('subscriptions').insert({
+      couple_id: couple.id,
+      title: input.title,
+      cost: input.cost,
+      frequency: input.frequency,
+      category: input.category,
+      assigned_to: input.assignedTo,
+    });
+    if (error) throw error;
+
+    await get().loadSubscriptions();
+  },
+
+  updateSubscription: async (id, input) => {
+    const { error } = await supabase
+      .from('subscriptions')
+      .update({
+        title: input.title,
+        cost: input.cost,
+        frequency: input.frequency,
+        category: input.category,
+        assigned_to: input.assignedTo,
+      })
+      .eq('id', id);
+    if (error) throw error;
+
+    await get().loadSubscriptions();
+  },
+
+  deleteSubscription: async (id) => {
+    const { error } = await supabase.from('subscriptions').delete().eq('id', id);
+    if (error) throw error;
+
+    await get().loadSubscriptions();
   },
 }));
 

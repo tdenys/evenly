@@ -37,6 +37,7 @@ export default function PaydayActionFormScreen({ route, navigation }: Props) {
     siblingsExcludingSelf.length > 0 ? Math.max(...siblingsExcludingSelf.map((a) => a.priority)) + 1 : 1;
 
   const [label, setLabel] = useState(existing?.label ?? '');
+  const [description, setDescription] = useState(existing?.description ?? '');
   const [priority, setPriority] = useState(String(existing?.priority ?? nextPriority));
   const [amount, setAmount] = useState<ManualPaydayAmount>(
     existing && existing.amount.type !== 'envelope' ? existing.amount : { type: 'fixed', value: 0 }
@@ -61,6 +62,7 @@ export default function PaydayActionFormScreen({ route, navigation }: Props) {
       const input = {
         ownerId,
         label: label.trim(),
+        description: description.trim(),
         priority: parsedPriority,
         amount: existing && isLinked ? existing.amount : amount,
       };
@@ -115,6 +117,15 @@ export default function PaydayActionFormScreen({ route, navigation }: Props) {
 
       <Text style={styles.label}>Libellé</Text>
       <TextInput style={styles.input} placeholder="Ex : Vire Voyage" value={label} onChangeText={setLabel} />
+
+      <Text style={styles.label}>Description</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Ex : pour les vacances d'été"
+        value={description}
+        onChangeText={setDescription}
+        multiline
+      />
 
       <Text style={styles.label}>Priorité (1 = traité en premier)</Text>
       <TextInput style={styles.input} keyboardType="number-pad" value={priority} onChangeText={setPriority} />

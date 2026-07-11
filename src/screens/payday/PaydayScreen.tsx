@@ -39,8 +39,9 @@ interface DisplayAction {
   id: string;
   ownerId: string;
   label: string;
+  description: string; // note libre saisie par l'utilisateur (peut être vide)
+  amountDescription: string; // texte auto-généré à partir du type de montant
   priority: number;
-  description: string;
   isLinked: boolean;
   runtimeAmount: PaydayAmount; // ce qui est réellement passé à runPayday (résolu si lié)
 }
@@ -63,6 +64,7 @@ export default function PaydayScreen({ navigation }: Props) {
   const [paydayDayText, setPaydayDayText] = useState('');
   const [savingDay, setSavingDay] = useState(false);
   const updateMyPaydayDay = useStore((s) => s.updateMyPaydayDay);
+  const updatePartnerPaydayDay = useStore((s) => s.updatePartnerPaydayDay);
 
   useFocusEffect(
     useCallback(() => {
@@ -73,9 +75,11 @@ export default function PaydayScreen({ navigation }: Props) {
     }, [loadEnvelopes, loadPaydayActions, refresh])
   );
 
-  // Reprogramme silencieusement le rappel local si le jour enregistré a changé ailleurs (ex:
-  // après réinstallation de l'app) — seulement si la permission est déjà accordée, sans jamais
-  // la demander automatiquement (ça doit toujours venir d'une action explicite).
+  // Reprogramme silencieusement le rappel local si MON jour enregistré a changé — que ce soit
+  // moi ou mon/ma partenaire qui l'ait modifié (édition croisée) — seulement si la permission
+  // est déjà accordée, sans jamais la demander automatiquement (ça doit toujours venir d'une
+  // action explicite). C'est ce mécanisme qui active effectivement le rappel côté partenaire
+  // quand c'est moi qui ai renseigné son jour depuis mon téléphone.
   useFocusEffect(
     useCallback(() => {
       if (Platform.OS === 'web' || !profile?.paydayDay) return;
@@ -85,9 +89,16 @@ export default function PaydayScreen({ navigation }: Props) {
     }, [profile?.paydayDay])
   );
 
+  const effectiveOwnerId = viewedOwnerId ?? profile?.id ?? null;
+  const viewedNetIncome = effectiveOwnerId === partner?.id ? (partner?.netIncome ?? 0) : (profile?.netIncome ?? 0);
+  const viewedPaydayDay = effectiveOwnerId === partner?.id ? (partner?.paydayDay ?? null) : (profile?.paydayDay ?? null);
+  const partnerLabel = partner?.displayName ?? 'ton/ta partenaire';
+
+  // Le jour de versement est éditable pour n'importe quelle personne depuis n'importe quel
+  // compte (comme le revenu) — resynchronisé au changement d'onglet ou si la valeur diverge.
   useEffect(() => {
-    setPaydayDayText(profile?.paydayDay ? String(profile.paydayDay) : '');
-  }, [profile?.paydayDay]);
+    setPaydayDayText(viewedPaydayDay ? String(viewedPaydayDay) : '');
+  }, [effectiveOwnerId, viewedPaydayDay]);
 
   const handleSavePaydayDay = async () => {
     const trimmed = paydayDayText.trim();
@@ -96,20 +107,34 @@ export default function PaydayScreen({ navigation }: Props) {
       notify('Jour invalide', 'Renseigne un jour entre 1 et 31, ou laisse vide.');
       return;
     }
+    const editingOwnDay = effectiveOwnerId === profile?.id;
     setSavingDay(true);
     try {
-      await updateMyPaydayDay(parsed);
-      if (parsed === null) {
-        await cancelPaydayReminder();
-      } else {
-        const granted = await requestNotificationPermission();
-        if (granted) {
-          await schedulePaydayReminder(parsed);
+      if (editingOwnDay) {
+        await updateMyPaydayDay(parsed);
+        if (parsed === null) {
+          await cancelPaydayReminder();
         } else {
-          notify('Permission refusée', "Le rappel ne pourra pas se déclencher sans autorisation de notification.");
+          const granted = await requestNotificationPermission();
+          if (granted) {
+            await schedulePaydayReminder(parsed);
+          } else {
+            notify('Permission refusée', "Le rappel ne pourra pas se déclencher sans autorisation de notification.");
+          }
         }
+        notify('Enregistré', parsed ? 'Rappel programmé chaque mois.' : 'Rappel désactivé.');
+      } else {
+        // Impossible de programmer/demander la permission sur l'appareil de l'autre personne
+        // depuis ici — seule la valeur en base change, le rappel s'active réellement quand
+        // cette personne rouvre l'app sur SON téléphone (cf. la réconciliation ci-dessus).
+        await updatePartnerPaydayDay(parsed);
+        notify(
+          'Enregistré',
+          parsed
+            ? `${partnerLabel} doit ouvrir l'app sur son téléphone pour activer le rappel.`
+            : 'Rappel désactivé.'
+        );
       }
-      notify('Enregistré', parsed ? 'Rappel programmé chaque mois.' : 'Rappel désactivé.');
     } catch (err) {
       notify('Erreur', errorMessage(err));
     } finally {
@@ -125,9 +150,6 @@ export default function PaydayScreen({ navigation }: Props) {
     }
     await sendTestNotification();
   };
-
-  const effectiveOwnerId = viewedOwnerId ?? profile?.id ?? null;
-  const viewedNetIncome = effectiveOwnerId === partner?.id ? (partner?.netIncome ?? 0) : (profile?.netIncome ?? 0);
 
   // Pré-remplit le salaire avec le revenu net déclaré de la personne affichée — mais seulement
   // si la valeur numérique diverge (ne pas écraser une saisie ponctuelle en cours), même
@@ -176,8 +198,9 @@ export default function PaydayScreen({ navigation }: Props) {
             id: action.id,
             ownerId: action.ownerId,
             label: action.label,
+            description: action.description,
+            amountDescription: describeManualAmount(action.amount),
             priority: action.priority,
-            description: describeManualAmount(action.amount),
             isLinked: false,
             runtimeAmount: action.amount,
           };
@@ -188,8 +211,9 @@ export default function PaydayScreen({ navigation }: Props) {
             id: action.id,
             ownerId: action.ownerId,
             label: action.label,
+            description: action.description,
+            amountDescription: 'Enveloppe supprimée',
             priority: action.priority,
-            description: 'Enveloppe supprimée',
             isLinked: true,
             runtimeAmount: { type: 'fixed', value: 0 },
           };
@@ -200,8 +224,9 @@ export default function PaydayScreen({ navigation }: Props) {
           id: action.id,
           ownerId: action.ownerId,
           label: action.label,
+          description: action.description,
+          amountDescription: `Suit l'enveloppe ${envelope.emoji} ${envelope.label}`,
           priority: action.priority,
-          description: `Suit l'enveloppe ${envelope.emoji} ${envelope.label}`,
           isLinked: true,
           runtimeAmount: resolveEnvelopeAmount(envelope.allocation, envelopeAmount * share),
         };
@@ -219,7 +244,14 @@ export default function PaydayScreen({ navigation }: Props) {
   }, [overrides]);
 
   const runtimeActions: PaydayAction[] = useMemo(
-    () => displayActions.map((d) => ({ id: d.id, label: d.label, priority: d.priority, amount: d.runtimeAmount })),
+    () =>
+      displayActions.map((d) => ({
+        id: d.id,
+        label: d.label,
+        description: d.description,
+        priority: d.priority,
+        amount: d.runtimeAmount,
+      })),
     [displayActions]
   );
 
@@ -236,8 +268,6 @@ export default function PaydayScreen({ navigation }: Props) {
   } else if (result.remainder > 0.01) {
     summary = { text: `${formatAmountWithPct(result.remainder, salary)} non alloué`, isOverflow: false };
   }
-
-  const partnerLabel = partner?.displayName ?? 'ton/ta partenaire';
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -260,7 +290,7 @@ export default function PaydayScreen({ navigation }: Props) {
         </TouchableOpacity>
       </View>
 
-      {Platform.OS !== 'web' && effectiveOwnerId === profile?.id && (
+      {Platform.OS !== 'web' && (
         <View style={styles.reminderBlock}>
           <Text style={styles.label}>Jour de versement (1-31)</Text>
           <View style={styles.reminderRow}>
@@ -278,9 +308,13 @@ export default function PaydayScreen({ navigation }: Props) {
             >
               <Text style={styles.reminderButtonText}>{savingDay ? '...' : 'Enregistrer'}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.reminderButton} onPress={() => void handleTestNotification()}>
-              <Text style={styles.reminderButtonText}>🔔 Tester</Text>
-            </TouchableOpacity>
+            {/* Tester ne fait sens que sur cet appareil — masqué quand on édite le jour de
+                l'autre personne (ça testerait mon téléphone, pas le sien). */}
+            {effectiveOwnerId === profile?.id && (
+              <TouchableOpacity style={styles.reminderButton} onPress={() => void handleTestNotification()}>
+                <Text style={styles.reminderButtonText}>🔔 Tester</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       )}
@@ -305,7 +339,12 @@ export default function PaydayScreen({ navigation }: Props) {
               <Text style={styles.rowLabel} numberOfLines={1}>
                 {action.label}
               </Text>
-              <Text style={styles.rowDescription}>{action.description}</Text>
+              <Text style={styles.rowDescription}>{action.amountDescription}</Text>
+              {action.description !== '' && (
+                <Text style={styles.rowNote} numberOfLines={2}>
+                  {action.description}
+                </Text>
+              )}
             </View>
 
             {action.isLinked ? (
@@ -398,6 +437,7 @@ const styles = StyleSheet.create({
   rowText: { flex: 1 },
   rowLabel: { fontSize: 16, fontWeight: '600' },
   rowDescription: { fontSize: 12, color: '#888', marginTop: 2 },
+  rowNote: { fontSize: 12, color: '#555', fontStyle: 'italic', marginTop: 2 },
   amountInput: {
     borderWidth: 1,
     borderColor: '#ccc',

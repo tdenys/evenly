@@ -270,3 +270,70 @@ alter table envelopes add column funded_by text; -- 'A' | 'B' | 'both' | null
 -- ============================================================
 
 alter table profiles add column payday_day integer check (payday_day between 1 and 31);
+
+-- ============================================================
+-- V2 — Jour de versement éditable depuis n'importe quel compte
+-- ============================================================
+
+-- Même principe que update_partner_income : la policy "update own profile" n'autorise que
+-- id = auth.uid(), donc modifier le jour du/de la partenaire passe par ce RPC security definer.
+-- Note : le rappel local ne peut se programmer que sur l'appareil de la personne concernée —
+-- si on modifie le jour du/de la partenaire depuis son propre téléphone, la programmation
+-- effective se fera seulement quand cette personne rouvrira l'app sur SON appareil (voir la
+-- réconciliation dans PaydayScreen.tsx).
+create function update_partner_payday_day(p_payday_day integer)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_couple_id uuid;
+begin
+  select couple_id into v_couple_id from profiles where id = auth.uid();
+  if v_couple_id is null then
+    raise exception 'not in a couple';
+  end if;
+
+  update profiles set payday_day = p_payday_day
+  where couple_id = v_couple_id and id <> auth.uid();
+end;
+$$;
+
+grant execute on function update_partner_payday_day(integer) to authenticated;
+
+-- ============================================================
+-- V2 — Description libre sur une action Payday
+-- ============================================================
+
+alter table payday_actions add column description text not null default '';
+
+-- ============================================================
+-- V2 — Abonnements (registre autonome, pas lié à Waterfall/Répartition)
+-- ============================================================
+
+create table subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  couple_id uuid not null references couples(id),
+  title text not null,
+  cost numeric(10,2) not null check (cost >= 0),
+  frequency text not null check (frequency in ('weekly','monthly','quarterly','yearly')),
+  category text not null default '',
+  assigned_to text not null check (assigned_to in ('A','B','both')),
+  created_at timestamptz not null default now()
+);
+
+alter table subscriptions enable row level security;
+
+-- Policies larges comme envelopes/payday_actions : n'importe quel membre du couple gère tous
+-- les abonnements.
+create policy "select couple subscriptions" on subscriptions
+  for select to authenticated using (couple_id = auth_couple_id());
+create policy "insert couple subscriptions" on subscriptions
+  for insert to authenticated with check (couple_id = auth_couple_id());
+create policy "update couple subscriptions" on subscriptions
+  for update to authenticated using (couple_id = auth_couple_id());
+create policy "delete couple subscriptions" on subscriptions
+  for delete to authenticated using (couple_id = auth_couple_id());
+
+grant select, insert, update, delete on subscriptions to authenticated;

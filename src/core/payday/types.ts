@@ -19,6 +19,7 @@ export type ManualPaydayAmount = Exclude<PaydayAmount, { type: 'envelope' }>;
 export interface PaydayAction {
   id: string;
   label: string;
+  description: string; // note libre, affichée sur l'écran Répartition — vide si non renseignée
   priority: number; // ordre de traitement parmi les actions de la même personne
   amount: PaydayAmount;
 }
