@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useLayoutEffect, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { MainStackParamList } from '@/navigation/RootNavigator';
+import type { RootStackParamList } from '@/navigation/RootNavigator';
 import { useStore } from '@/store/useStore';
 import type { Amount } from '@/core/waterfall/types';
 import { findEnvelope, findEnvelopeResult } from '@/core/waterfall/tree';
@@ -10,8 +10,16 @@ import AmountEditor from '@/components/AmountEditor';
 import { confirmAction, errorMessage, notify } from '@/lib/alert';
 import { coupleIncome, coupleLabels } from '@/lib/couple';
 import { formatAmountWithPct } from '@/lib/format';
+import { colors, ink } from '@/theme/colors';
+import { fonts, type } from '@/theme/typography';
+import SectionCard from '@/components/ui/SectionCard';
+import AppSwitch from '@/components/ui/AppSwitch';
+import Stepper from '@/components/ui/Stepper';
+import { ChipRow } from '@/components/ui/Chip';
+import Chip from '@/components/ui/Chip';
+import Button from '@/components/ui/Button';
 
-type Props = NativeStackScreenProps<MainStackParamList, 'EnvelopeForm'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'EnvelopeForm'>;
 
 export default function EnvelopeFormScreen({ route, navigation }: Props) {
   const profile = useStore((s) => s.profile);
@@ -49,7 +57,7 @@ export default function EnvelopeFormScreen({ route, navigation }: Props) {
 
   const [label, setLabel] = useState(existing?.label ?? '');
   const [emoji, setEmoji] = useState(existing?.emoji ?? '💰');
-  const [priority, setPriority] = useState(String(existing?.priority ?? nextPriority));
+  const [priority, setPriority] = useState(existing?.priority ?? nextPriority);
   const [allocation, setAllocation] = useState<Amount>(
     existing?.allocation ?? { type: 'percent_envelope', pct: 0 }
   );
@@ -62,18 +70,13 @@ export default function EnvelopeFormScreen({ route, navigation }: Props) {
       notify('Libellé manquant', 'Donne un nom à cette enveloppe.');
       return;
     }
-    const parsedPriority = Number(priority);
-    if (!Number.isInteger(parsedPriority)) {
-      notify('Priorité invalide', 'La priorité doit être un nombre entier.');
-      return;
-    }
 
     setSaving(true);
     try {
       const input = {
         label: label.trim(),
         emoji: emoji.trim() || '💰',
-        priority: parsedPriority,
+        priority,
         allocation,
         enabled,
         fundedBy,
@@ -95,7 +98,7 @@ export default function EnvelopeFormScreen({ route, navigation }: Props) {
     // "% du reste à 100%" ne consomme réellement TOUT ce qu'il reste que si cette enveloppe est
     // traitée en dernier — on la pousse donc systématiquement à la priorité la plus basse.
     setAllocation({ type: 'percent_remaining', pct: 100 });
-    setPriority(String(nextPriority));
+    setPriority(nextPriority);
   };
 
   const handleDelete = () => {
@@ -110,122 +113,122 @@ export default function EnvelopeFormScreen({ route, navigation }: Props) {
     });
   };
 
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      title: existing ? 'Modifier l\'enveloppe' : 'Nouvelle enveloppe',
+      headerLeft: () => (
+        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={8}>
+          <Text style={styles.headerAction}>Annuler</Text>
+        </TouchableOpacity>
+      ),
+      headerRight: () => (
+        <TouchableOpacity onPress={() => void handleSave()} disabled={saving} hitSlop={8}>
+          <Text style={[styles.headerAction, styles.headerActionPrimary, saving && styles.headerActionDisabled]}>
+            {saving ? '...' : 'Enregistrer'}
+          </Text>
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, existing, saving, label, emoji, priority, allocation, enabled, fundedBy]);
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <Text style={styles.label}>Emoji</Text>
-      <TextInput style={styles.emojiInput} value={emoji} onChangeText={setEmoji} maxLength={2} />
+      <SectionCard label="Détails">
+        <View style={styles.emojiLabelRow}>
+          <TextInput style={styles.emojiInput} value={emoji} onChangeText={setEmoji} maxLength={2} />
+          <TextInput
+            style={[styles.input, styles.labelInput]}
+            placeholder="Ex : Investissement"
+            value={label}
+            onChangeText={setLabel}
+          />
+        </View>
 
-      <Text style={styles.label}>Libellé</Text>
-      <TextInput style={styles.input} placeholder="Ex : Investissement" value={label} onChangeText={setLabel} />
+        <View style={styles.fieldRow}>
+          <Text style={styles.fieldLabel}>Priorité (1 = remplie en premier)</Text>
+          <Stepper value={priority} onChange={setPriority} min={1} max={99} />
+        </View>
 
-      <Text style={styles.label}>Priorité (1 = remplie en premier)</Text>
-      <TextInput
-        style={styles.input}
-        keyboardType="number-pad"
-        value={priority}
-        onChangeText={setPriority}
-      />
+        <View style={styles.fieldRow}>
+          <Text style={styles.fieldLabel}>Enveloppe active</Text>
+          <AppSwitch value={enabled} onValueChange={setEnabled} />
+        </View>
+      </SectionCard>
 
-      <View style={styles.enabledRow}>
-        <Text style={styles.label}>Enveloppe active</Text>
-        <Switch value={enabled} onValueChange={setEnabled} />
-      </View>
-
-      <Text style={styles.label}>Allocation</Text>
-      <Text style={styles.availableHint}>
-        Reste disponible ici : {formatAmountWithPct(available, parentAmount)}
-      </Text>
-      <TouchableOpacity style={styles.fillButton} onPress={handleFillRemainder}>
-        <Text style={styles.fillButtonText}>Combler avec le reste</Text>
-      </TouchableOpacity>
-      <AmountEditor value={allocation} onChange={setAllocation} personLabels={personLabels} />
-
-      <Text style={styles.label}>Financée par</Text>
-      <View style={styles.chips}>
-        {(
-          [
-            [null, 'Aucun'],
-            ['A', personLabels.A],
-            ['B', personLabels.B],
-            ['both', 'Les deux'],
-          ] as const
-        ).map(([value, chipLabel]) => (
-          <TouchableOpacity
-            key={chipLabel}
-            style={[styles.chip, fundedBy === value && styles.chipSelected]}
-            onPress={() => setFundedBy(value)}
-          >
-            <Text style={[styles.chipText, fundedBy === value && styles.chipTextSelected]}>{chipLabel}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <TouchableOpacity style={styles.button} onPress={() => void handleSave()} disabled={saving}>
-        <Text style={styles.buttonText}>{saving ? 'Enregistrement...' : 'Enregistrer'}</Text>
-      </TouchableOpacity>
-
-      {existing && (
-        <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
-          <Text style={styles.deleteButtonText}>Supprimer l'enveloppe</Text>
+      <SectionCard label="Allocation">
+        <Text style={styles.availableHint}>
+          Reste disponible ici : {formatAmountWithPct(available, parentAmount)}
+        </Text>
+        <TouchableOpacity style={styles.fillButton} onPress={handleFillRemainder}>
+          <Text style={styles.fillButtonText}>Combler avec le reste</Text>
         </TouchableOpacity>
-      )}
+        <AmountEditor value={allocation} onChange={setAllocation} personLabels={personLabels} />
+      </SectionCard>
+
+      <SectionCard label="Financée par">
+        <ChipRow>
+          {(
+            [
+              [null, 'Aucun'],
+              ['A', personLabels.A],
+              ['B', personLabels.B],
+              ['both', 'Les deux'],
+            ] as const
+          ).map(([value, chipLabel]) => (
+            <Chip
+              key={chipLabel}
+              label={chipLabel}
+              selected={fundedBy === value}
+              onPress={() => setFundedBy(value)}
+              gradient={value === 'both'}
+            />
+          ))}
+        </ChipRow>
+      </SectionCard>
+
+      {existing && <Button title="Supprimer l'enveloppe" variant="text-danger" onPress={handleDelete} />}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  // paddingBottom généreux : sans ça, le bouton "Enregistrer"/"Supprimer" reste collé sous le
-  // clavier ou en toute fin de scroll, difficile à atteindre sur mobile.
-  content: { padding: 20, gap: 8, paddingBottom: 48 },
-  label: { fontSize: 14, fontWeight: '600', color: '#555', marginTop: 12, marginBottom: 6 },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-  },
+  container: { flex: 1, backgroundColor: colors.bg },
+  content: { padding: 16, gap: 14, paddingBottom: 48 },
+  headerAction: { fontFamily: fonts.karlaSemiBold, fontSize: 14.5, color: ink(0.55), paddingHorizontal: 4 },
+  headerActionPrimary: { color: colors.primary, fontFamily: fonts.karlaBold },
+  headerActionDisabled: { opacity: 0.5 },
+  emojiLabelRow: { flexDirection: 'row', gap: 10 },
   emojiInput: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: colors.borderInput,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
     padding: 12,
-    fontSize: 24,
+    fontSize: 22,
     textAlign: 'center',
-    width: 64,
+    width: 56,
   },
-  availableHint: { fontSize: 13, color: '#b45309', marginBottom: 8 },
-  enabledRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
+  labelInput: { flex: 1 },
+  input: {
+    borderWidth: 1.5,
+    borderColor: colors.borderInput,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    padding: 12,
+    fontFamily: fonts.karlaMedium,
+    fontSize: 15,
+    color: colors.ink,
   },
-  chipSelected: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
-  chipText: { color: '#333' },
-  chipTextSelected: { color: '#fff', fontWeight: '600' },
+  fieldRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  fieldLabel: { ...type.fieldLabel, color: ink(0.6), flexShrink: 1 },
+  availableHint: { fontFamily: fonts.karlaSemiBold, fontSize: 12.5, color: colors.warning },
   fillButton: {
-    borderWidth: 1,
-    borderColor: '#2563eb',
+    borderWidth: 1.5,
+    borderColor: colors.primary,
     borderRadius: 20,
     paddingVertical: 6,
     paddingHorizontal: 14,
     alignSelf: 'flex-start',
-    marginBottom: 12,
   },
-  fillButtonText: { color: '#2563eb', fontSize: 13, fontWeight: '600' },
-  button: {
-    backgroundColor: '#2563eb',
-    borderRadius: 8,
-    padding: 14,
-    alignItems: 'center',
-    marginTop: 24,
-  },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  deleteButton: { marginTop: 16, alignItems: 'center' },
-  deleteButtonText: { color: '#dc2626', fontSize: 14, fontWeight: '600' },
+  fillButtonText: { fontFamily: fonts.karlaBold, fontSize: 12.5, color: colors.primary },
 });

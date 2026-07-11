@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useStore } from '@/store/useStore';
 import { errorMessage, notify } from '@/lib/alert';
+import { colors, ink } from '@/theme/colors';
+import { fonts } from '@/theme/typography';
+import Button from '@/components/ui/Button';
 
 export default function CreateOrJoinCoupleScreen() {
   const createCouple = useStore((s) => s.createCouple);
@@ -38,22 +41,19 @@ export default function CreateOrJoinCoupleScreen() {
       <Text style={styles.title}>Bienvenue !</Text>
       <Text style={styles.subtitle}>Crée votre couple ou rejoins celui de ton/ta partenaire.</Text>
 
-      <TouchableOpacity style={styles.button} onPress={handleCreate} disabled={loading}>
-        <Text style={styles.buttonText}>Créer un couple</Text>
-      </TouchableOpacity>
+      <Button title="Créer un couple" onPress={() => void handleCreate()} disabled={loading} />
 
-      <Text style={styles.or}>— ou —</Text>
+      <Text style={styles.or}>OU</Text>
 
       <TextInput
         style={styles.input}
         placeholder="Code d'invitation"
+        placeholderTextColor={ink(0.4)}
         autoCapitalize="characters"
         value={inviteCode}
         onChangeText={setInviteCode}
       />
-      <TouchableOpacity style={styles.buttonOutline} onPress={handleJoin} disabled={loading}>
-        <Text style={styles.buttonOutlineText}>Rejoindre avec ce code</Text>
-      </TouchableOpacity>
+      <Button title="Rejoindre avec ce code" variant="outline" onPress={() => void handleJoin()} disabled={loading} />
 
       <TouchableOpacity onPress={() => void signOut()} style={styles.signOut}>
         <Text style={styles.link}>Se déconnecter</Text>
@@ -63,34 +63,22 @@ export default function CreateOrJoinCoupleScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', padding: 24, gap: 12 },
-  title: { fontSize: 28, fontWeight: '700', textAlign: 'center' },
-  subtitle: { fontSize: 15, color: '#555', textAlign: 'center', marginBottom: 16 },
+  container: { flex: 1, justifyContent: 'center', backgroundColor: colors.bg, padding: 24, gap: 12 },
+  title: { fontFamily: fonts.spectralSemiBold, fontSize: 24, color: colors.ink, textAlign: 'center' },
+  subtitle: { fontFamily: fonts.karlaMedium, fontSize: 14.5, color: ink(0.55), textAlign: 'center', marginBottom: 16 },
   input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
+    borderWidth: 1.5,
+    borderColor: colors.borderInput,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    padding: 14,
+    fontFamily: fonts.karlaMedium,
+    fontSize: 15,
+    color: colors.ink,
     textAlign: 'center',
     letterSpacing: 2,
   },
-  button: {
-    backgroundColor: '#2563eb',
-    borderRadius: 8,
-    padding: 14,
-    alignItems: 'center',
-  },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  buttonOutline: {
-    borderWidth: 1,
-    borderColor: '#2563eb',
-    borderRadius: 8,
-    padding: 14,
-    alignItems: 'center',
-  },
-  buttonOutlineText: { color: '#2563eb', fontSize: 16, fontWeight: '600' },
-  or: { textAlign: 'center', color: '#999', marginVertical: 4 },
+  or: { fontFamily: fonts.karlaBold, fontSize: 11, color: ink(0.4), textAlign: 'center', marginVertical: 4 },
   signOut: { marginTop: 32 },
-  link: { color: '#999', textAlign: 'center' },
+  link: { fontFamily: fonts.karlaSemiBold, fontSize: 13, color: ink(0.4), textAlign: 'center' },
 });

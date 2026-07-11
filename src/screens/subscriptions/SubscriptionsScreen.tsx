@@ -1,16 +1,24 @@
 import { useCallback, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import type { CompositeScreenProps } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
-import type { MainStackParamList } from '@/navigation/RootNavigator';
+import type { MainTabParamList, RootStackParamList } from '@/navigation/RootNavigator';
 import { useStore } from '@/store/useStore';
 import type { Subscription, SubscriptionFrequency } from '@/core/subscriptions/types';
 import { monthlyCost } from '@/core/subscriptions/monthlyCost';
 import { orderCouple } from '@/lib/couple';
 import { formatAmount } from '@/lib/format';
 import { errorMessage, notify } from '@/lib/alert';
+import { colors, ink } from '@/theme/colors';
+import { fonts } from '@/theme/typography';
+import SummaryCard from '@/components/ui/SummaryCard';
 
-type Props = NativeStackScreenProps<MainStackParamList, 'Subscriptions'>;
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<MainTabParamList, 'Subscriptions'>,
+  NativeStackScreenProps<RootStackParamList>
+>;
 
 const FREQUENCY_SUFFIX: Record<SubscriptionFrequency, string> = {
   weekly: '/semaine',
@@ -99,10 +107,7 @@ export default function SubscriptionsScreen({ navigation }: Props) {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.summaryCard}>
-        <Text style={styles.summaryLabel}>Coût mensuel total</Text>
-        <Text style={styles.summaryAmount}>{formatAmount(total)}</Text>
-      </View>
+      <SummaryCard label="Coût mensuel total" amount={formatAmount(total)} />
 
       {filtered.length === 0 && !loading && (
         <Text style={styles.empty}>Aucun abonnement pour l'instant.</Text>
@@ -122,6 +127,7 @@ export default function SubscriptionsScreen({ navigation }: Props) {
           <Text style={styles.rowAmount}>{formatAmount(monthlyCost(sub.cost, sub.frequency))}</Text>
 
           <TouchableOpacity
+            style={styles.editZone}
             onPress={() => navigation.navigate('SubscriptionForm', { subscriptionId: sub.id })}
             hitSlop={8}
           >
@@ -129,62 +135,41 @@ export default function SubscriptionsScreen({ navigation }: Props) {
           </TouchableOpacity>
         </View>
       ))}
-
-      <TouchableOpacity style={styles.addButton} onPress={() => navigation.navigate('SubscriptionForm', {})}>
-        <Text style={styles.addButtonText}>+ Ajouter un abonnement</Text>
-      </TouchableOpacity>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { padding: 16, paddingBottom: 48 },
-  // 4 onglets : wrap en 2x2 sur mobile plutôt que de les écraser sur une seule ligne (le nom
-  // du/de la partenaire peut être long).
-  tabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  container: { flex: 1, backgroundColor: colors.bg },
+  content: { padding: 16, paddingBottom: 48, gap: 14 },
+  // Une seule rangée de 4 pills (pas de grille 2x2) — padding réduit pour tenir à 390px, quitte
+  // à tronquer le prénom du/de la partenaire (numberOfLines) plutôt que de repasser en grille.
+  tabs: { flexDirection: 'row', gap: 6 },
   tab: {
-    flexBasis: '47%',
-    flexGrow: 1,
-    borderWidth: 1,
-    borderColor: '#2563eb',
-    borderRadius: 8,
-    paddingVertical: 10,
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: colors.borderInput,
+    borderRadius: 20,
+    paddingVertical: 9,
+    paddingHorizontal: 4,
     alignItems: 'center',
   },
-  tabSelected: { backgroundColor: '#2563eb' },
-  tabText: { color: '#2563eb', fontWeight: '600', fontSize: 13 },
-  tabTextSelected: { color: '#fff' },
-  summaryCard: {
-    backgroundColor: '#eef2ff',
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 16,
-  },
-  summaryLabel: { fontSize: 13, color: '#555' },
-  summaryAmount: { fontSize: 24, fontWeight: '800' },
-  empty: { textAlign: 'center', color: '#999', marginTop: 32 },
+  tabSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  tabText: { fontFamily: fonts.karlaSemiBold, fontSize: 11, color: ink(0.65) },
+  tabTextSelected: { color: '#fff', fontFamily: fonts.karlaBold },
+  empty: { fontFamily: fonts.karlaMedium, textAlign: 'center', color: ink(0.4), marginTop: 32 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#ddd',
+    borderBottomColor: colors.borderSubtle,
   },
   rowText: { flex: 1 },
-  rowTitle: { fontSize: 16, fontWeight: '600' },
-  rowDescription: { fontSize: 12, color: '#888', marginTop: 2 },
-  rowAmount: { fontSize: 15, fontWeight: '700' },
+  rowTitle: { fontFamily: fonts.karlaBold, fontSize: 14, color: colors.ink },
+  rowDescription: { fontFamily: fonts.karlaMedium, fontSize: 11.5, color: ink(0.5), marginTop: 2 },
+  rowAmount: { fontFamily: fonts.spectralSemiBold, fontSize: 15, color: colors.ink },
+  editZone: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   edit: { fontSize: 15 },
-  addButton: {
-    backgroundColor: '#2563eb',
-    borderRadius: 8,
-    padding: 14,
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  addButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });

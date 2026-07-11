@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import type { CompositeScreenProps } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
-import type { MainStackParamList } from '@/navigation/RootNavigator';
+import type { MainTabParamList, RootStackParamList } from '@/navigation/RootNavigator';
 import { useStore } from '@/store/useStore';
 import { round2, runPayday } from '@/core/payday/engine';
 import type { ManualPaydayAmount, PaydayAction, PaydayAmount } from '@/core/payday/types';
@@ -19,8 +21,17 @@ import {
   schedulePaydayReminder,
   sendTestNotification,
 } from '@/lib/notifications';
+import { colors, ink } from '@/theme/colors';
+import { fonts } from '@/theme/typography';
+import SectionCard from '@/components/ui/SectionCard';
+import Stepper from '@/components/ui/Stepper';
+import AppSwitch from '@/components/ui/AppSwitch';
+import Button from '@/components/ui/Button';
 
-type Props = NativeStackScreenProps<MainStackParamList, 'Payday'>;
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<MainTabParamList, 'Payday'>,
+  NativeStackScreenProps<RootStackParamList>
+>;
 
 function describeManualAmount(amount: ManualPaydayAmount): string {
   switch (amount.type) {
@@ -99,6 +110,13 @@ export default function PaydayScreen({ navigation }: Props) {
   useEffect(() => {
     setPaydayDayText(viewedPaydayDay ? String(viewedPaydayDay) : '');
   }, [effectiveOwnerId, viewedPaydayDay]);
+
+  const reminderEnabled = paydayDayText.trim() !== '';
+  const dayValue = Number(paydayDayText) || 1;
+
+  const handleToggleReminder = (enabled: boolean) => {
+    setPaydayDayText(enabled ? String(dayValue) : '');
+  };
 
   const handleSavePaydayDay = async () => {
     const trimmed = paydayDayText.trim();
@@ -271,52 +289,55 @@ export default function PaydayScreen({ navigation }: Props) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.tabs}>
+      <View style={styles.pillContainer}>
         <TouchableOpacity
-          style={[styles.tab, effectiveOwnerId === profile?.id && styles.tabSelected]}
+          style={[styles.pill, effectiveOwnerId === profile?.id && styles.pillSelected]}
           onPress={() => profile && setViewedOwnerId(profile.id)}
         >
-          <Text style={[styles.tabText, effectiveOwnerId === profile?.id && styles.tabTextSelected]}>
+          <Text style={[styles.pillText, effectiveOwnerId === profile?.id && styles.pillTextSelected]}>
             Mon salaire
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, effectiveOwnerId === partner?.id && styles.tabSelected]}
+          style={[styles.pill, effectiveOwnerId === partner?.id && styles.pillSelected]}
           onPress={() => partner && setViewedOwnerId(partner.id)}
         >
-          <Text style={[styles.tabText, effectiveOwnerId === partner?.id && styles.tabTextSelected]}>
+          <Text style={[styles.pillText, effectiveOwnerId === partner?.id && styles.pillTextSelected]} numberOfLines={1}>
             Salaire de {partnerLabel}
           </Text>
         </TouchableOpacity>
       </View>
 
       {Platform.OS !== 'web' && (
-        <View style={styles.reminderBlock}>
-          <Text style={styles.label}>Jour de versement (1-31)</Text>
-          <View style={styles.reminderRow}>
-            <TextInput
-              style={styles.dayInput}
-              keyboardType="number-pad"
-              placeholder="ex: 28"
-              value={paydayDayText}
-              onChangeText={setPaydayDayText}
-            />
-            <TouchableOpacity
-              style={styles.reminderButton}
-              onPress={() => void handleSavePaydayDay()}
-              disabled={savingDay}
-            >
-              <Text style={styles.reminderButtonText}>{savingDay ? '...' : 'Enregistrer'}</Text>
-            </TouchableOpacity>
-            {/* Tester ne fait sens que sur cet appareil — masqué quand on édite le jour de
-                l'autre personne (ça testerait mon téléphone, pas le sien). */}
-            {effectiveOwnerId === profile?.id && (
-              <TouchableOpacity style={styles.reminderButton} onPress={() => void handleTestNotification()}>
-                <Text style={styles.reminderButtonText}>🔔 Tester</Text>
-              </TouchableOpacity>
-            )}
+        <SectionCard label="Jour de versement">
+          <View style={styles.fieldRow}>
+            <Text style={styles.fieldLabel}>Rappel activé</Text>
+            <AppSwitch value={reminderEnabled} onValueChange={handleToggleReminder} />
           </View>
-        </View>
+          {reminderEnabled && (
+            <View style={styles.fieldRow}>
+              <Text style={styles.fieldLabel}>Jour du mois</Text>
+              <View style={styles.stepperRow}>
+                <Stepper value={dayValue} onChange={(v) => setPaydayDayText(String(v))} min={1} max={31} />
+                {effectiveOwnerId === profile?.id && (
+                  <TouchableOpacity
+                    style={styles.bellButton}
+                    onPress={() => void handleTestNotification()}
+                    hitSlop={4}
+                  >
+                    <Text style={styles.bellIcon}>🔔</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          )}
+          <Button
+            title={savingDay ? '...' : 'Enregistrer'}
+            onPress={() => void handleSavePaydayDay()}
+            disabled={savingDay}
+            compact
+          />
+        </SectionCard>
       )}
 
       <Text style={styles.label}>Montant du salaire</Text>
@@ -334,7 +355,7 @@ export default function PaydayScreen({ navigation }: Props) {
         const computed = result.actionResults.find((r) => r.actionId === action.id)?.amount ?? 0;
         const displayText = overrides[action.id] ?? String(computed);
         return (
-          <View key={action.id} style={styles.row}>
+          <View key={action.id} style={[styles.row, action.isLinked && styles.rowLinked]}>
             <View style={styles.rowText}>
               <Text style={styles.rowLabel} numberOfLines={1}>
                 {action.label}
@@ -359,6 +380,7 @@ export default function PaydayScreen({ navigation }: Props) {
             )}
 
             <TouchableOpacity
+              style={styles.editZone}
               onPress={() =>
                 navigation.navigate('PaydayActionForm', { actionId: action.id, ownerId: action.ownerId })
               }
@@ -370,94 +392,77 @@ export default function PaydayScreen({ navigation }: Props) {
         );
       })}
 
-      <TouchableOpacity
-        style={styles.addButton}
+      <Button
+        title="+ Ajouter une action"
         onPress={() => effectiveOwnerId && navigation.navigate('PaydayActionForm', { ownerId: effectiveOwnerId })}
-      >
-        <Text style={styles.addButtonText}>+ Ajouter une action</Text>
-      </TouchableOpacity>
+      />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { padding: 16, paddingBottom: 48 },
-  tabs: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  tab: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#2563eb',
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: 'center',
+  container: { flex: 1, backgroundColor: colors.bg },
+  content: { padding: 16, paddingBottom: 48, gap: 14 },
+  pillContainer: {
+    flexDirection: 'row',
+    backgroundColor: colors.section,
+    borderRadius: 14,
+    padding: 4,
+    gap: 4,
   },
-  tabSelected: { backgroundColor: '#2563eb' },
-  tabText: { color: '#2563eb', fontWeight: '600', fontSize: 13 },
-  tabTextSelected: { color: '#fff' },
-  label: { fontSize: 14, fontWeight: '600', color: '#555', marginBottom: 6 },
-  reminderBlock: { marginBottom: 16 },
-  reminderRow: { flexDirection: 'row', gap: 8 },
-  dayInput: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 15,
-    width: 70,
-  },
-  reminderButton: {
-    borderWidth: 1,
-    borderColor: '#2563eb',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    justifyContent: 'center',
-  },
-  reminderButtonText: { color: '#2563eb', fontSize: 13, fontWeight: '600' },
+  pill: { flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
+  pillSelected: { backgroundColor: colors.primary },
+  pillText: { fontFamily: fonts.karlaSemiBold, fontSize: 12.5, color: ink(0.55) },
+  pillTextSelected: { color: '#fff', fontFamily: fonts.karlaBold },
+  fieldRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  fieldLabel: { fontFamily: fonts.karlaSemiBold, fontSize: 12.5, color: ink(0.6) },
+  stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  bellButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  bellIcon: { fontSize: 18 },
+  label: { fontFamily: fonts.karlaSemiBold, fontSize: 12.5, color: ink(0.6) },
   salaryInput: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: colors.borderInput,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
     padding: 12,
+    fontFamily: fonts.spectralSemiBold,
     fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 4,
+    color: colors.ink,
   },
-  remaining: { fontSize: 13, color: '#b45309', marginBottom: 12 },
-  overflow: { fontSize: 13, color: '#dc2626', fontWeight: '600', marginBottom: 12 },
-  empty: { textAlign: 'center', color: '#999', marginTop: 32 },
+  remaining: { fontFamily: fonts.karlaSemiBold, fontSize: 12.5, color: colors.warning },
+  overflow: { fontFamily: fonts.karlaBold, fontSize: 12.5, color: colors.danger },
+  empty: { fontFamily: fonts.karlaMedium, textAlign: 'center', color: ink(0.4), marginTop: 32 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#ddd',
+    borderBottomColor: colors.borderSubtle,
   },
+  // Une action liée à une enveloppe est en lecture seule ici (se modifie depuis Budget) — opacité
+  // réduite pour signaler ce statut, cohérent avec le design.
+  rowLinked: { opacity: 0.6 },
   rowText: { flex: 1 },
-  rowLabel: { fontSize: 16, fontWeight: '600' },
-  rowDescription: { fontSize: 12, color: '#888', marginTop: 2 },
-  rowNote: { fontSize: 12, color: '#555', fontStyle: 'italic', marginTop: 2 },
+  rowLabel: { fontFamily: fonts.karlaBold, fontSize: 14, color: colors.ink },
+  rowDescription: { fontFamily: fonts.karlaMedium, fontSize: 11.5, color: ink(0.5), marginTop: 2 },
+  rowNote: { fontFamily: fonts.karlaMedium, fontSize: 11.5, color: ink(0.55), fontStyle: 'italic', marginTop: 2 },
   amountInput: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: colors.borderInput,
+    borderRadius: 10,
+    backgroundColor: colors.surface,
     padding: 8,
+    fontFamily: fonts.spectralSemiBold,
     fontSize: 15,
-    fontWeight: '700',
     width: 90,
     textAlign: 'right',
+    color: colors.ink,
   },
   // Montant dérivé d'une enveloppe : pas de bordure de champ de saisie, pour signaler
   // visuellement que ce n'est pas éditable ici (ça se change depuis l'écran Budget).
-  amountReadOnly: { fontSize: 15, fontWeight: '700', width: 90, textAlign: 'right' },
+  amountReadOnly: { fontFamily: fonts.spectralSemiBold, fontSize: 15, width: 90, textAlign: 'right', color: colors.ink },
+  editZone: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   edit: { fontSize: 15 },
-  addButton: {
-    backgroundColor: '#2563eb',
-    borderRadius: 8,
-    padding: 14,
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  addButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });

@@ -1,14 +1,20 @@
-import { useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { MainStackParamList } from '@/navigation/RootNavigator';
+import type { RootStackParamList } from '@/navigation/RootNavigator';
 import { useStore } from '@/store/useStore';
 import type { ManualPaydayAmount } from '@/core/payday/types';
 import { findEnvelope } from '@/core/waterfall/tree';
 import PaydayAmountEditor from '@/components/PaydayAmountEditor';
 import { confirmAction, errorMessage, notify } from '@/lib/alert';
+import { colors, ink } from '@/theme/colors';
+import { fonts, type } from '@/theme/typography';
+import SectionCard from '@/components/ui/SectionCard';
+import Stepper from '@/components/ui/Stepper';
+import Chip, { ChipRow } from '@/components/ui/Chip';
+import Button from '@/components/ui/Button';
 
-type Props = NativeStackScreenProps<MainStackParamList, 'PaydayActionForm'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'PaydayActionForm'>;
 
 export default function PaydayActionFormScreen({ route, navigation }: Props) {
   const profile = useStore((s) => s.profile);
@@ -38,7 +44,7 @@ export default function PaydayActionFormScreen({ route, navigation }: Props) {
 
   const [label, setLabel] = useState(existing?.label ?? '');
   const [description, setDescription] = useState(existing?.description ?? '');
-  const [priority, setPriority] = useState(String(existing?.priority ?? nextPriority));
+  const [priority, setPriority] = useState(existing?.priority ?? nextPriority);
   const [amount, setAmount] = useState<ManualPaydayAmount>(
     existing && existing.amount.type !== 'envelope' ? existing.amount : { type: 'fixed', value: 0 }
   );
@@ -47,11 +53,6 @@ export default function PaydayActionFormScreen({ route, navigation }: Props) {
   const handleSave = async () => {
     if (!label.trim()) {
       notify('Libellé manquant', 'Donne un nom à cette action.');
-      return;
-    }
-    const parsedPriority = Number(priority);
-    if (!Number.isInteger(parsedPriority)) {
-      notify('Priorité invalide', 'La priorité doit être un nombre entier.');
       return;
     }
 
@@ -63,7 +64,7 @@ export default function PaydayActionFormScreen({ route, navigation }: Props) {
         ownerId,
         label: label.trim(),
         description: description.trim(),
-        priority: parsedPriority,
+        priority,
         amount: existing && isLinked ? existing.amount : amount,
       };
       if (existing) {
@@ -91,63 +92,70 @@ export default function PaydayActionFormScreen({ route, navigation }: Props) {
     });
   };
 
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      title: existing ? 'Modifier l\'action' : 'Nouvelle action',
+      headerLeft: () => (
+        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={8}>
+          <Text style={styles.headerAction}>Annuler</Text>
+        </TouchableOpacity>
+      ),
+      headerRight: () => (
+        <TouchableOpacity onPress={() => void handleSave()} disabled={saving} hitSlop={8}>
+          <Text style={[styles.headerAction, styles.headerActionPrimary, saving && styles.headerActionDisabled]}>
+            {saving ? '...' : 'Enregistrer'}
+          </Text>
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, existing, saving, ownerId, label, description, priority, amount]);
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <Text style={styles.label}>Salaire concerné</Text>
-      <View style={styles.chips}>
-        {profile && (
-          <TouchableOpacity
-            style={[styles.chip, ownerId === profile.id && styles.chipSelected]}
-            onPress={() => setOwnerId(profile.id)}
-          >
-            <Text style={[styles.chipText, ownerId === profile.id && styles.chipTextSelected]}>Moi</Text>
-          </TouchableOpacity>
+      <SectionCard label="Détails">
+        <Text style={styles.fieldLabel}>Salaire concerné</Text>
+        <ChipRow>
+          {profile && <Chip label="Moi" selected={ownerId === profile.id} onPress={() => setOwnerId(profile.id)} />}
+          {partner && (
+            <Chip
+              label={partner.displayName}
+              selected={ownerId === partner.id}
+              onPress={() => setOwnerId(partner.id)}
+            />
+          )}
+        </ChipRow>
+
+        <Text style={styles.fieldLabel}>Libellé</Text>
+        <TextInput style={styles.input} placeholder="Ex : Vire Voyage" value={label} onChangeText={setLabel} />
+
+        <Text style={styles.fieldLabel}>Description</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Ex : pour les vacances d'été"
+          value={description}
+          onChangeText={setDescription}
+          multiline
+        />
+
+        <View style={styles.fieldRow}>
+          <Text style={styles.fieldLabel}>Priorité (1 = traité en premier)</Text>
+          <Stepper value={priority} onChange={setPriority} min={1} max={99} />
+        </View>
+      </SectionCard>
+
+      <SectionCard label="Montant">
+        {isLinked ? (
+          <Text style={styles.linkedHint}>
+            Suit l'enveloppe {linkedEnvelope ? `${linkedEnvelope.emoji} ${linkedEnvelope.label}` : '(supprimée)'} —
+            modifiable depuis l'écran Budget.
+          </Text>
+        ) : (
+          <PaydayAmountEditor value={amount} onChange={setAmount} />
         )}
-        {partner && (
-          <TouchableOpacity
-            style={[styles.chip, ownerId === partner.id && styles.chipSelected]}
-            onPress={() => setOwnerId(partner.id)}
-          >
-            <Text style={[styles.chipText, ownerId === partner.id && styles.chipTextSelected]}>
-              {partner.displayName}
-            </Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      <Text style={styles.label}>Libellé</Text>
-      <TextInput style={styles.input} placeholder="Ex : Vire Voyage" value={label} onChangeText={setLabel} />
-
-      <Text style={styles.label}>Description</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Ex : pour les vacances d'été"
-        value={description}
-        onChangeText={setDescription}
-        multiline
-      />
-
-      <Text style={styles.label}>Priorité (1 = traité en premier)</Text>
-      <TextInput style={styles.input} keyboardType="number-pad" value={priority} onChangeText={setPriority} />
-
-      <Text style={styles.label}>Montant</Text>
-      {isLinked ? (
-        <Text style={styles.linkedHint}>
-          Suit l'enveloppe {linkedEnvelope ? `${linkedEnvelope.emoji} ${linkedEnvelope.label}` : '(supprimée)'} —
-          modifiable depuis l'écran Budget.
-        </Text>
-      ) : (
-        <PaydayAmountEditor value={amount} onChange={setAmount} />
-      )}
-
-      <TouchableOpacity style={styles.button} onPress={() => void handleSave()} disabled={saving}>
-        <Text style={styles.buttonText}>{saving ? 'Enregistrement...' : 'Enregistrer'}</Text>
-      </TouchableOpacity>
+      </SectionCard>
 
       {existing && !isLinked && (
-        <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
-          <Text style={styles.deleteButtonText}>Supprimer l'action</Text>
-        </TouchableOpacity>
+        <Button title="Supprimer l'action" variant="text-danger" onPress={handleDelete} />
       )}
       {existing && isLinked && (
         <Text style={styles.linkedDeleteHint}>
@@ -159,37 +167,23 @@ export default function PaydayActionFormScreen({ route, navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { padding: 20, gap: 8, paddingBottom: 48 },
-  label: { fontSize: 14, fontWeight: '600', color: '#555', marginTop: 12, marginBottom: 6 },
+  container: { flex: 1, backgroundColor: colors.bg },
+  content: { padding: 16, gap: 14, paddingBottom: 48 },
+  headerAction: { fontFamily: fonts.karlaSemiBold, fontSize: 14.5, color: ink(0.55), paddingHorizontal: 4 },
+  headerActionPrimary: { color: colors.primary, fontFamily: fonts.karlaBold },
+  headerActionDisabled: { opacity: 0.5 },
+  fieldLabel: { ...type.fieldLabel, color: ink(0.6) },
+  fieldRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: colors.borderInput,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
     padding: 12,
-    fontSize: 16,
+    fontFamily: fonts.karlaMedium,
+    fontSize: 15,
+    color: colors.ink,
   },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-  },
-  chipSelected: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
-  chipText: { color: '#333' },
-  chipTextSelected: { color: '#fff', fontWeight: '600' },
-  linkedHint: { fontSize: 14, color: '#555', fontStyle: 'italic' },
-  linkedDeleteHint: { marginTop: 16, fontSize: 12, color: '#999', textAlign: 'center' },
-  button: {
-    backgroundColor: '#2563eb',
-    borderRadius: 8,
-    padding: 14,
-    alignItems: 'center',
-    marginTop: 24,
-  },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  deleteButton: { marginTop: 16, alignItems: 'center' },
-  deleteButtonText: { color: '#dc2626', fontSize: 14, fontWeight: '600' },
+  linkedHint: { fontFamily: fonts.karlaMedium, fontSize: 13.5, color: ink(0.55), fontStyle: 'italic' },
+  linkedDeleteHint: { fontFamily: fonts.karlaMedium, fontSize: 12, color: ink(0.4), textAlign: 'center' },
 });

@@ -2,7 +2,21 @@ import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
+import { useFonts } from 'expo-font';
+import {
+  Spectral_500Medium,
+  Spectral_600SemiBold,
+  Spectral_700Bold,
+} from '@expo-google-fonts/spectral';
+import {
+  Karla_400Regular,
+  Karla_500Medium,
+  Karla_600SemiBold,
+  Karla_700Bold,
+  Karla_800ExtraBold,
+} from '@expo-google-fonts/karla';
 import { RootNavigator, navigationRef } from '@/navigation/RootNavigator';
+import LoadingScreen from '@/components/ui/LoadingScreen';
 
 // Sans handler, une notification reçue pendant que l'app est au premier plan ne s'affiche pas
 // du tout — nécessaire pour que le bouton "🔔 Tester" (déclenchement immédiat) soit visible.
@@ -18,6 +32,17 @@ if (Platform.OS !== 'web') {
 }
 
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    Spectral_500Medium,
+    Spectral_600SemiBold,
+    Spectral_700Bold,
+    Karla_400Regular,
+    Karla_500Medium,
+    Karla_600SemiBold,
+    Karla_700Bold,
+    Karla_800ExtraBold,
+  });
+
   useEffect(() => {
     if (Platform.OS === 'web') return;
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
@@ -27,14 +52,16 @@ export default function App() {
       // ignoré, compromis assumé pour rester dans le périmètre de la demande.
       if (screen === 'Payday' && navigationRef.isReady()) {
         try {
-          navigationRef.navigate('Payday');
+          navigationRef.navigate('Tabs', { screen: 'Payday' });
         } catch {
-          // MainNavigator pas monté (ex: déconnecté) — rien à faire.
+          // RootNavigatorStack pas monté (ex: déconnecté) — rien à faire.
         }
       }
     });
     return () => subscription.remove();
   }, []);
+
+  if (!fontsLoaded) return <LoadingScreen />;
 
   return (
     <>

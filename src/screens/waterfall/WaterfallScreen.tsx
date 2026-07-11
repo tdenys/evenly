@@ -1,8 +1,10 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import type { CompositeScreenProps } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
-import type { MainStackParamList } from '@/navigation/RootNavigator';
+import type { MainTabParamList, RootStackParamList } from '@/navigation/RootNavigator';
 import { useStore } from '@/store/useStore';
 import { runWaterfall } from '@/core/waterfall/engine';
 import { findEnvelopeResult } from '@/core/waterfall/tree';
@@ -10,8 +12,14 @@ import { describeChildrenSummary, SiblingEnvelopeList } from '@/components/Envel
 import { formatAmount } from '@/lib/format';
 import { errorMessage, notify } from '@/lib/alert';
 import { coupleIncome, coupleLabels } from '@/lib/couple';
+import { colors, ink } from '@/theme/colors';
+import { fonts } from '@/theme/typography';
+import SummaryCard from '@/components/ui/SummaryCard';
 
-type Props = NativeStackScreenProps<MainStackParamList, 'Waterfall'>;
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<MainTabParamList, 'Waterfall'>,
+  NativeStackScreenProps<RootStackParamList>
+>;
 
 export default function WaterfallScreen({ navigation }: Props) {
   const profile = useStore((s) => s.profile);
@@ -23,6 +31,7 @@ export default function WaterfallScreen({ navigation }: Props) {
   const setEnvelopeEnabled = useStore((s) => s.setEnvelopeEnabled);
   const [loading, setLoading] = useState(true);
   const [dragging, setDragging] = useState(false);
+  const [reorderMode, setReorderMode] = useState(false);
 
   // useFocusEffect (pas useEffect) : native-stack garde cet écran monté en arrière-plan quand
   // on va sur "Revenus"/"Enveloppe", donc un simple effet "au montage" ne se redéclencherait
@@ -61,12 +70,21 @@ export default function WaterfallScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.summaryCard, styles.inset]}>
-        <Text style={styles.summaryLabel}>Revenu total du couple</Text>
-        <Text style={styles.summaryAmount}>{formatAmount(result.totalIncome)}</Text>
-        {summary && (
-          <Text style={summary.isOverflow ? styles.overflow : styles.remaining}>{summary.text}</Text>
-        )}
+      <View style={styles.inset}>
+        <SummaryCard
+          label="Revenu total du couple"
+          amount={formatAmount(result.totalIncome)}
+          alert={summary ? { text: summary.text, variant: summary.isOverflow ? 'danger' : 'warning' } : null}
+          variant="hero"
+        />
+      </View>
+
+      <View style={[styles.inset, styles.reorderRow]}>
+        <TouchableOpacity onPress={() => setReorderMode((m) => !m)} hitSlop={8}>
+          <Text style={[styles.reorderToggle, reorderMode && styles.reorderToggleActive]}>
+            {reorderMode ? '✓ Terminer' : '↕ Réordonner'}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -88,73 +106,26 @@ export default function WaterfallScreen({ navigation }: Props) {
           onEdit={(envelopeId) => navigation.navigate('EnvelopeForm', { envelopeId })}
           onToggleEnabled={handleToggleEnabled}
           onDragStateChange={setDragging}
+          reorderMode={reorderMode}
         />
       </ScrollView>
-
-      <TouchableOpacity
-        style={[styles.addButton, styles.inset]}
-        onPress={() => navigation.navigate('EnvelopeForm', {})}
-      >
-        <Text style={styles.addButtonText}>+ Ajouter une enveloppe</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={[styles.incomeButton, styles.inset]} onPress={() => navigation.navigate('Income')}>
-        <Text style={styles.incomeButtonText}>💶 Revenus</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={[styles.incomeButton, styles.inset]} onPress={() => navigation.navigate('Payday')}>
-        <Text style={styles.incomeButtonText}>🔀 Répartition</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[styles.incomeButton, styles.inset]}
-        onPress={() => navigation.navigate('Subscriptions')}
-      >
-        <Text style={styles.incomeButtonText}>📱 Abonnements</Text>
-      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 16, paddingBottom: 16 },
+  container: { flex: 1, backgroundColor: colors.bg, paddingTop: 16, paddingBottom: 16 },
   // Le contenu de la liste d'enveloppes doit pouvoir s'étendre d'un bord à l'autre de l'écran
   // (pas de marge droite/gauche) — cette marge horizontale est donc appliquée au cas par cas aux
   // autres éléments (carte de résumé, boutons) plutôt qu'au conteneur entier.
   inset: { marginHorizontal: 16 },
-  summaryCard: {
-    backgroundColor: '#eef2ff',
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 16,
-  },
-  summaryLabel: { fontSize: 13, color: '#555' },
-  summaryAmount: { fontSize: 24, fontWeight: '800' },
-  remaining: { fontSize: 13, color: '#b45309', marginTop: 4 },
-  overflow: { fontSize: 13, color: '#dc2626', fontWeight: '600', marginTop: 4 },
+  reorderRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 14, marginBottom: 4 },
+  reorderToggle: { fontFamily: fonts.karlaBold, fontSize: 12.5, color: ink(0.5) },
+  reorderToggleActive: { color: colors.primary },
   // Sur mobile web, un pull vers le bas en haut de la liste peut déclencher le "tirer pour
   // actualiser" natif du navigateur (Chrome/Safari), en plus de notre propre glisser-déposer —
   // overscrollBehaviorY le désactive au niveau CSS (sans effet sur natif/Expo Go).
   scroll: Platform.OS === 'web' ? ({ overscrollBehaviorY: 'contain' } as object) : {},
   list: { flexGrow: 1, paddingBottom: 8 },
-  empty: { textAlign: 'center', color: '#999', marginTop: 32 },
-  addButton: {
-    backgroundColor: '#2563eb',
-    borderRadius: 8,
-    padding: 14,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  addButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  incomeButton: {
-    borderWidth: 1,
-    borderColor: '#2563eb',
-    borderRadius: 8,
-    padding: 14,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  incomeButtonText: { color: '#2563eb', fontSize: 16, fontWeight: '600' },
+  empty: { fontFamily: fonts.karlaMedium, textAlign: 'center', color: ink(0.4), marginTop: 32 },
 });

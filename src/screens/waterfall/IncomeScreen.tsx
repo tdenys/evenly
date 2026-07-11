@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useStore } from '@/store/useStore';
 import { errorMessage, notify } from '@/lib/alert';
+import { colors, ink, withOpacity } from '@/theme/colors';
+import { fonts } from '@/theme/typography';
+import Button from '@/components/ui/Button';
 
 function parseIncome(text: string): number | null {
   const parsed = Number(text.replace(',', '.'));
@@ -12,12 +15,15 @@ function parseIncome(text: string): number | null {
 interface IncomeFieldProps {
   label: string;
   netIncome: number;
+  accent: string;
   onSave: (netIncome: number) => Promise<void>;
 }
 
 /** Un salaire éditable — même formulaire pour "mon" revenu et celui du/de la partenaire, les
- * deux étant maintenant modifiables depuis n'importe quel compte. */
-function IncomeField({ label, netIncome, onSave }: IncomeFieldProps) {
+ * deux étant maintenant modifiables depuis n'importe quel compte. Teinté à l'accent de la
+ * personne pour suivre le pattern "Duo bicolore" (jamais "moi"/"partenaire" en couleur, mais
+ * Accent A/B, stable). */
+function IncomeField({ label, netIncome, accent, onSave }: IncomeFieldProps) {
   const [text, setText] = useState(String(netIncome));
   const [saving, setSaving] = useState(false);
 
@@ -49,12 +55,19 @@ function IncomeField({ label, netIncome, onSave }: IncomeFieldProps) {
   };
 
   return (
-    <View>
-      <Text style={styles.label}>{label}</Text>
+    <View style={[styles.card, { backgroundColor: withOpacity(accent, 0.1), borderColor: withOpacity(accent, 0.2) }]}>
+      <View style={styles.cardHeader}>
+        <View style={[styles.dot, { backgroundColor: accent }]} />
+        <Text style={styles.label}>{label}</Text>
+      </View>
       <TextInput style={styles.input} keyboardType="decimal-pad" value={text} onChangeText={setText} />
-      <TouchableOpacity style={styles.button} onPress={() => void handleSave()} disabled={saving}>
-        <Text style={styles.buttonText}>{saving ? 'Enregistrement...' : 'Enregistrer'}</Text>
-      </TouchableOpacity>
+      <Button
+        title={saving ? 'Enregistrement...' : 'Enregistrer'}
+        onPress={() => void handleSave()}
+        disabled={saving}
+        compact
+        color={accent}
+      />
     </View>
   );
 }
@@ -76,10 +89,16 @@ export default function IncomeScreen() {
 
   return (
     <View style={styles.container}>
-      <IncomeField label="Mon revenu net" netIncome={profile?.netIncome ?? 0} onSave={updateMyIncome} />
+      <IncomeField
+        label="Mon revenu net"
+        netIncome={profile?.netIncome ?? 0}
+        accent={colors.accentA}
+        onSave={updateMyIncome}
+      />
       <IncomeField
         label={`Revenu de ${partner?.displayName ?? 'ton/ta partenaire'}`}
         netIncome={partner?.netIncome ?? 0}
+        accent={colors.accentB}
         onSave={updatePartnerIncome}
       />
     </View>
@@ -87,22 +106,19 @@ export default function IncomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, gap: 20 },
-  label: { fontSize: 14, fontWeight: '600', color: '#555', marginBottom: 6 },
+  container: { flex: 1, backgroundColor: colors.bg, padding: 16, gap: 14 },
+  card: { borderRadius: 16, borderWidth: 1.5, padding: 16, gap: 12 },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  label: { fontFamily: fonts.karlaBold, fontSize: 13, color: ink(0.65) },
   input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: colors.borderInput,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
     padding: 12,
+    fontFamily: fonts.spectralSemiBold,
     fontSize: 20,
-    fontWeight: '700',
+    color: colors.ink,
   },
-  button: {
-    backgroundColor: '#2563eb',
-    borderRadius: 8,
-    padding: 14,
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });

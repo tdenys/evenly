@@ -1,22 +1,38 @@
 import { useRef, useState } from 'react';
-import { Animated, PanResponder, Platform, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { Amount, Envelope, EnvelopeResult } from '@/core/waterfall/types';
 import { summarizeChildren } from '@/core/waterfall/tree';
 import { formatAmount, formatAmountWithPct, formatPct } from '@/lib/format';
+import { personAccent } from '@/lib/couple';
+import { colors, ink } from '@/theme/colors';
+import { fonts } from '@/theme/typography';
+import AppSwitch from '@/components/ui/AppSwitch';
 
 export interface PersonLabels {
   A: string;
   B: string;
 }
 
-function describeFundedBy(fundedBy: Envelope['fundedBy'], personLabels: PersonLabels): string | null {
+interface FundedBySegment {
+  text: string;
+  color: string;
+}
+
+/** Segments colorés (Accent A / Accent B) plutôt qu'une seule chaîne — permet de teindre chaque
+ * prénom de sa propre couleur de personne, y compris pour "Les deux" (A puis B, sans dégradé de
+ * texte : React Native n'a pas de text-fill-gradient natif sans dépendance supplémentaire). */
+function describeFundedBySegments(fundedBy: Envelope['fundedBy'], personLabels: PersonLabels): FundedBySegment[] | null {
   switch (fundedBy) {
     case 'A':
-      return `💸 ${personLabels.A}`;
+      return [{ text: `💸 ${personLabels.A}`, color: personAccent('A') }];
     case 'B':
-      return `💸 ${personLabels.B}`;
+      return [{ text: `💸 ${personLabels.B}`, color: personAccent('B') }];
     case 'both':
-      return `💸 ${personLabels.A} + ${personLabels.B}`;
+      return [
+        { text: `💸 ${personLabels.A}`, color: personAccent('A') },
+        { text: ' + ', color: ink(0.4) },
+        { text: personLabels.B, color: personAccent('B') },
+      ];
     case null:
       return null;
   }
@@ -33,6 +49,13 @@ function describeAllocation(amount: Amount, personLabels: PersonLabels): string 
     case 'prorata_income':
       return `Prorata revenus (${personLabels[amount.who]})`;
   }
+}
+
+// Le % (calculé sur parentAmount) fait doublon à l'affichage avec le libellé pour
+// percent_envelope/percent_remaining (qui embarquent déjà un pourcentage) — on ne l'affiche
+// séparément que pour fixed/prorata_income, où ce n'est pas déjà dans la description.
+function shouldShowPct(amount: Amount): boolean {
+  return amount.type === 'fixed' || amount.type === 'prorata_income';
 }
 
 /** Ligne "reste à placer" / avertissement de dépassement sous une liste d'enfants — le
@@ -71,6 +94,10 @@ interface ListProps {
   /** Remonté jusqu'à l'écran pour désactiver le ScrollView pendant qu'un glissé est actif —
    * sinon les deux gestes entrent en conflit. */
   onDragStateChange?: (dragging: boolean) => void;
+  /** Mode réordonnancement dédié : poignée de glisser visible uniquement dans ce mode ; switch
+   * actif/inactif et crayon d'édition masqués pendant ce mode pour éviter les taps accidentels
+   * en plein glisser. */
+  reorderMode: boolean;
 }
 
 // Détermine de combien de positions un déplacement vertical (dy, en pixels) fait franchir
@@ -117,6 +144,7 @@ export function SiblingEnvelopeList({
   onEdit,
   onToggleEnabled,
   onDragStateChange,
+  reorderMode,
 }: ListProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const dragY = useRef(new Animated.Value(0)).current;
@@ -171,6 +199,7 @@ export function SiblingEnvelopeList({
             onDragStateChange={onDragStateChange}
             onLayoutHeight={(height) => heightsRef.current.set(envelope.id, height)}
             dragHandlers={panResponderFor(envelope, index).panHandlers}
+            reorderMode={reorderMode}
           />
         );
       })}
@@ -193,6 +222,7 @@ interface ContainerProps {
   onDragStateChange?: (dragging: boolean) => void;
   onLayoutHeight: (height: number) => void;
   dragHandlers: ReturnType<typeof PanResponder.create>['panHandlers'];
+  reorderMode: boolean;
 }
 
 function EnvelopeTreeRowContainer({
@@ -210,13 +240,14 @@ function EnvelopeTreeRowContainer({
   onDragStateChange,
   onLayoutHeight,
   dragHandlers,
+  reorderMode,
 }: ContainerProps) {
   const [expanded, setExpanded] = useState(false);
   const result = getResult(envelope.id);
   const amount = result?.amount ?? 0;
-  const pct = formatPct(amount, parentAmount);
+  const pct = shouldShowPct(envelope.allocation) ? formatPct(amount, parentAmount) : null;
   const summary = expanded ? describeChildrenSummary(amount, result?.children ?? []) : null;
-  const fundedByText = describeFundedBy(envelope.fundedBy, personLabels);
+  const fundedBySegments = describeFundedBySegments(envelope.fundedBy, personLabels);
 
   return (
     <Animated.View
@@ -242,33 +273,34 @@ function EnvelopeTreeRowContainer({
               <View style={styles.descriptionRow}>
                 <Text style={styles.description} numberOfLines={1}>
                   {describeAllocation(envelope.allocation, personLabels)}
-                  {fundedByText && ` · ${fundedByText}`}
+                  {fundedBySegments && ' · '}
+                  {fundedBySegments?.map((seg, i) => (
+                    <Text key={i} style={{ color: seg.color }}>
+                      {seg.text}
+                    </Text>
+                  ))}
                   {!envelope.enabled && ' · Désactivée'}
                 </Text>
                 {pct && <Text style={styles.pct}>{pct}</Text>}
               </View>
             </View>
 
-            <View
-              style={styles.switchWrap}
-              // Sur web, le clic sur le Switch (un <input> natif) bubble en DOM jusqu'au
-              // TouchableOpacity parent (onClick), qui bascule alors aussi l'expand/collapse de
-              // la ligne — la négociation de responder React Native ne suffit pas à l'empêcher
-              // ici, il faut couper la propagation DOM directement.
-              {...(Platform.OS === 'web' ? { onClick: (e: { stopPropagation: () => void }) => e.stopPropagation() } : null)}
-            >
-              <Switch value={envelope.enabled} onValueChange={(value) => onToggleEnabled(envelope.id, value)} />
-            </View>
-
-            <TouchableOpacity onPress={() => onEdit(envelope.id)} hitSlop={8}>
-              <Text style={styles.edit}>✏️</Text>
-            </TouchableOpacity>
+            {!reorderMode && (
+              <>
+                <AppSwitch value={envelope.enabled} onValueChange={(value) => onToggleEnabled(envelope.id, value)} />
+                <TouchableOpacity style={styles.editZone} onPress={() => onEdit(envelope.id)} hitSlop={8}>
+                  <Text style={styles.edit}>✏️</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </TouchableOpacity>
 
-        <View style={styles.grip} {...dragHandlers}>
-          <Text style={styles.gripText}>⠿</Text>
-        </View>
+        {reorderMode && (
+          <View style={styles.grip} {...dragHandlers}>
+            <Text style={styles.gripText}>⠿</Text>
+          </View>
+        )}
       </View>
 
       {expanded && (
@@ -284,6 +316,7 @@ function EnvelopeTreeRowContainer({
             onEdit={onEdit}
             onToggleEnabled={onToggleEnabled}
             onDragStateChange={onDragStateChange}
+            reorderMode={reorderMode}
           />
           {summary && (
             <Text
@@ -314,12 +347,12 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     paddingRight: 4,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#ddd',
+    borderBottomColor: colors.borderSubtle,
   },
   rowDisabled: { opacity: 0.5 },
   rowContent: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 8,
     // Sur web, glisser la souris sur du texte déclenche la sélection native du navigateur —
     // sans rapport avec notre geste de drag, juste un artefact visuel du navigateur à éviter.
     userSelect: 'none',
@@ -327,21 +360,21 @@ const styles = StyleSheet.create({
   dragging: {
     zIndex: 10,
     elevation: 4,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     shadowColor: '#000',
     shadowOpacity: 0.15,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
   },
-  rowOuter: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  rowOuter: { flexDirection: 'row', alignItems: 'center', gap: 0 },
   // Les 2 lignes (libellé+montant, puis description+%) partagent cette même largeur — c'est ce
   // qui garantit que le montant et le %, chacun aligné à droite de sa ligne, tombent exactement
   // l'un sous l'autre, sans dupliquer le switch/crayon sur une 3e ligne.
   textBlock: { flex: 1 },
   main: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  chevron: { width: 16, color: '#999' },
-  label: { flex: 1, fontSize: 16, fontWeight: '600', flexShrink: 1 },
-  amount: { fontSize: 15, fontWeight: '700' },
+  chevron: { width: 16, color: ink(0.4) },
+  label: { flex: 1, fontFamily: fonts.karlaBold, fontSize: 14, color: colors.ink, flexShrink: 1 },
+  amount: { fontFamily: fonts.spectralSemiBold, fontSize: 15, color: colors.ink },
   descriptionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -349,16 +382,14 @@ const styles = StyleSheet.create({
     marginLeft: 22,
     marginTop: 2,
   },
-  description: { fontSize: 12, color: '#888', flexShrink: 1 },
-  pct: { fontSize: 12, color: '#888', marginLeft: 8 },
-  // Compense le fait qu'un `transform: scale` réduit l'apparence du Switch sans réduire la
-  // place qu'il réserve dans le flex layout — la marge négative récupère cet espace mort.
-  switchWrap: { transform: [{ scale: 0.75 }], marginHorizontal: -8 },
+  description: { fontFamily: fonts.karlaMedium, fontSize: 11.5, color: ink(0.5), flexShrink: 1 },
+  pct: { fontFamily: fonts.karlaMedium, fontSize: 11.5, color: ink(0.5), marginLeft: 8 },
+  editZone: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   edit: { fontSize: 15 },
-  summary: { fontSize: 13, color: '#b45309', fontWeight: '600', paddingVertical: 6 },
-  summaryOverflow: { color: '#dc2626' },
+  summary: { fontFamily: fonts.karlaBold, fontSize: 12.5, color: colors.warning, paddingVertical: 6 },
+  summaryOverflow: { color: colors.danger },
   addChild: { paddingVertical: 10 },
-  addChildText: { color: '#2563eb', fontSize: 14, fontWeight: '600' },
+  addChildText: { fontFamily: fonts.karlaBold, fontSize: 13, color: colors.primary },
   // Poignée de glisser dédiée : large (48px) pour rester facile à viser au pouce, mais limitée
   // à cette zone pour que le reste de la ligne (l'essentiel de l'écran) reste scrollable
   // normalement — voir le commentaire sur SiblingEnvelopeList plus haut.
@@ -367,7 +398,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderLeftWidth: StyleSheet.hairlineWidth,
-    borderLeftColor: '#eee',
+    borderLeftColor: colors.borderSubtle,
   },
-  gripText: { fontSize: 22, color: '#999' },
+  gripText: { fontSize: 22, color: ink(0.4) },
 });
