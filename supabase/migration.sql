@@ -337,3 +337,31 @@ create policy "delete couple subscriptions" on subscriptions
   for delete to authenticated using (couple_id = auth_couple_id());
 
 grant select, insert, update, delete on subscriptions to authenticated;
+
+-- ============================================================
+-- V2 — Prénom (display_name) éditable depuis n'importe quel compte
+-- ============================================================
+
+-- Même principe que update_partner_income / update_partner_payday_day : la policy
+-- "update own profile" n'autorise que id = auth.uid(), donc modifier le prénom du/de la
+-- partenaire passe par ce RPC security definer, qui ne touche que sa colonne display_name.
+create function update_partner_display_name(p_display_name text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_couple_id uuid;
+begin
+  select couple_id into v_couple_id from profiles where id = auth.uid();
+  if v_couple_id is null then
+    raise exception 'not in a couple';
+  end if;
+
+  update profiles set display_name = p_display_name
+  where couple_id = v_couple_id and id <> auth.uid();
+end;
+$$;
+
+grant execute on function update_partner_display_name(text) to authenticated;

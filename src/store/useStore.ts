@@ -40,6 +40,8 @@ interface StoreState {
   createCouple: () => Promise<string>;
   joinCouple: (inviteCode: string) => Promise<void>;
   refresh: () => Promise<void>;
+  updateMyDisplayName: (displayName: string) => Promise<void>;
+  updatePartnerDisplayName: (displayName: string) => Promise<void>;
   updateMyIncome: (netIncome: number) => Promise<void>;
   updatePartnerIncome: (netIncome: number) => Promise<void>;
   updateMyPaydayDay: (day: number | null) => Promise<void>;
@@ -202,6 +204,26 @@ export const useStore = create<StoreState>((set, get) => ({
     const { profile } = get();
     if (!profile) return;
     await loadCoupleData(profile.id, set, get);
+  },
+
+  updateMyDisplayName: async (displayName: string) => {
+    const { profile } = get();
+    if (!profile) throw new Error('Profil introuvable.');
+
+    const { error } = await supabase.from('profiles').update({ display_name: displayName }).eq('id', profile.id);
+    if (error) throw error;
+
+    await get().refresh();
+  },
+
+  updatePartnerDisplayName: async (displayName: string) => {
+    // Même principe que updatePartnerIncome : la policy RLS "update own profile" n'autorise
+    // que id = auth.uid(), donc modifier le prénom du/de la partenaire passe par le RPC
+    // security definer update_partner_display_name (voir supabase/migration.sql).
+    const { error } = await supabase.rpc('update_partner_display_name', { p_display_name: displayName });
+    if (error) throw error;
+
+    await get().refresh();
   },
 
   updateMyIncome: async (netIncome: number) => {

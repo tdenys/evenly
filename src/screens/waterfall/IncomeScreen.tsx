@@ -12,6 +12,60 @@ function parseIncome(text: string): number | null {
   return Number.isNaN(parsed) || parsed < 0 ? null : parsed;
 }
 
+interface NameFieldProps {
+  label: string;
+  displayName: string;
+  accent: string;
+  onSave: (displayName: string) => Promise<void>;
+}
+
+/** Le prénom affiché pour une personne — même principe que IncomeField : éditable depuis
+ * n'importe quel compte (voir updatePartnerDisplayName), resynchronisé si l'autre appareil le
+ * modifie entre-temps. */
+function NameField({ label, displayName, accent, onSave }: NameFieldProps) {
+  const [text, setText] = useState(displayName);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (text !== displayName) setText(displayName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayName]);
+
+  const handleSave = async () => {
+    const trimmed = text.trim();
+    if (trimmed === '') {
+      notify('Prénom invalide', 'Renseigne un prénom.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave(trimmed);
+      notify('Enregistré', 'Le prénom a été mis à jour.');
+    } catch (err) {
+      notify('Erreur', errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <View style={[styles.card, { backgroundColor: withOpacity(accent, 0.1), borderColor: withOpacity(accent, 0.2) }]}>
+      <View style={styles.cardHeader}>
+        <View style={[styles.dot, { backgroundColor: accent }]} />
+        <Text style={styles.label}>{label}</Text>
+      </View>
+      <TextInput style={styles.input} value={text} onChangeText={setText} autoCapitalize="words" />
+      <Button
+        title={saving ? 'Enregistrement...' : 'Enregistrer'}
+        onPress={() => void handleSave()}
+        disabled={saving}
+        compact
+        color={accent}
+      />
+    </View>
+  );
+}
+
 interface IncomeFieldProps {
   label: string;
   netIncome: number;
@@ -75,6 +129,8 @@ function IncomeField({ label, netIncome, accent, onSave }: IncomeFieldProps) {
 export default function IncomeScreen() {
   const profile = useStore((s) => s.profile);
   const partner = useStore((s) => s.partner);
+  const updateMyDisplayName = useStore((s) => s.updateMyDisplayName);
+  const updatePartnerDisplayName = useStore((s) => s.updatePartnerDisplayName);
   const updateMyIncome = useStore((s) => s.updateMyIncome);
   const updatePartnerIncome = useStore((s) => s.updatePartnerIncome);
   const refresh = useStore((s) => s.refresh);
@@ -89,11 +145,23 @@ export default function IncomeScreen() {
 
   return (
     <View style={styles.container}>
+      <NameField
+        label="Mon prénom"
+        displayName={profile?.displayName ?? ''}
+        accent={colors.accentA}
+        onSave={updateMyDisplayName}
+      />
       <IncomeField
         label="Mon revenu net"
         netIncome={profile?.netIncome ?? 0}
         accent={colors.accentA}
         onSave={updateMyIncome}
+      />
+      <NameField
+        label={`Prénom de ${partner?.displayName ?? 'ton/ta partenaire'}`}
+        displayName={partner?.displayName ?? ''}
+        accent={colors.accentB}
+        onSave={updatePartnerDisplayName}
       />
       <IncomeField
         label={`Revenu de ${partner?.displayName ?? 'ton/ta partenaire'}`}
