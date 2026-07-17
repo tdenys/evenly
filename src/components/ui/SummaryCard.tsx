@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, ink, personGradient, withOpacity } from '@/theme/colors';
 import { fonts } from '@/theme/typography';
@@ -15,9 +15,11 @@ interface Props {
   /** hero = dégradé Accent A/B à 12% (carte "Revenu total du couple"), secondary = fond neutre
    * (les autres totaux, ex. "Coût mensuel total" des Abonnements). */
   variant?: 'hero' | 'secondary';
+  /** Rend la carte tappable (ex: "Revenu total du couple" ouvre l'édition des revenus). */
+  onPress?: () => void;
 }
 
-export default function SummaryCard({ label, amount, alert, variant = 'secondary' }: Props) {
+export default function SummaryCard({ label, amount, alert, variant = 'secondary', onPress }: Props) {
   const content = (
     <>
       <Text style={styles.label}>{label}</Text>
@@ -30,20 +32,29 @@ export default function SummaryCard({ label, amount, alert, variant = 'secondary
     </>
   );
 
+  const Wrapper = onPress ? TouchableOpacity : View;
+  const wrapperProps = onPress ? { onPress, activeOpacity: 0.8 } : {};
+
   if (variant === 'hero') {
     return (
-      <LinearGradient
-        colors={[withOpacity(personGradient[0], 0.12), withOpacity(personGradient[1], 0.12)]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.card}
-      >
-        {content}
-      </LinearGradient>
+      <Wrapper {...wrapperProps}>
+        <LinearGradient
+          colors={[withOpacity(personGradient[0], 0.12), withOpacity(personGradient[1], 0.12)]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.card}
+        >
+          {content}
+        </LinearGradient>
+      </Wrapper>
     );
   }
 
-  return <View style={[styles.card, { backgroundColor: colors.section }]}>{content}</View>;
+  return (
+    <Wrapper {...wrapperProps} style={[styles.card, { backgroundColor: colors.section }]}>
+      {content}
+    </Wrapper>
+  );
 }
 
 const styles = StyleSheet.create({

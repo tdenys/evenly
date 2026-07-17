@@ -17,11 +17,12 @@ import CreateOrJoinCoupleScreen from '@/screens/onboarding/CreateOrJoinCoupleScr
 import WaitingForPartnerScreen from '@/screens/onboarding/WaitingForPartnerScreen';
 import WaterfallScreen from '@/screens/waterfall/WaterfallScreen';
 import EnvelopeFormScreen from '@/screens/waterfall/EnvelopeFormScreen';
-import IncomeScreen from '@/screens/waterfall/IncomeScreen';
+import IncomeFormScreen from '@/screens/waterfall/IncomeFormScreen';
 import PaydayScreen from '@/screens/payday/PaydayScreen';
 import PaydayActionFormScreen from '@/screens/payday/PaydayActionFormScreen';
 import SubscriptionsScreen from '@/screens/subscriptions/SubscriptionsScreen';
 import SubscriptionFormScreen from '@/screens/subscriptions/SubscriptionFormScreen';
+import SettingsScreen from '@/screens/settings/SettingsScreen';
 
 export type AuthStackParamList = {
   Login: undefined;
@@ -29,11 +30,15 @@ export type AuthStackParamList = {
 };
 
 // Les 4 sections principales, désormais des onglets persistants plutôt qu'une pile classique.
+// Revenus n'est plus un onglet à part : c'est un modal atteint depuis la carte "Revenu total du
+// couple" sur Budget (voir IncomeForm ci-dessous) — les revenus se modifient rarement, contrairement
+// aux 4 onglets "contenu qu'on consulte". Paramètres est le 4e onglet, réservé au réglages de
+// compte (prénoms pour l'instant), volontairement placé tout à droite.
 export type MainTabParamList = {
   Waterfall: undefined;
-  Income: undefined;
   Payday: undefined;
   Subscriptions: undefined;
+  Settings: undefined;
 };
 
 // Les formulaires (et les onglets eux-mêmes) vivent au niveau racine — les formulaires
@@ -41,6 +46,7 @@ export type MainTabParamList = {
 export type RootStackParamList = {
   Tabs: NavigatorScreenParams<MainTabParamList> | undefined;
   EnvelopeForm: { envelopeId?: string; parentId?: string };
+  IncomeForm: undefined;
   PaydayActionForm: { actionId?: string; ownerId: string };
   SubscriptionForm: { subscriptionId?: string };
 };
@@ -66,15 +72,15 @@ function AuthNavigator() {
 
 const TAB_ICONS: Record<keyof MainTabParamList, string> = {
   Waterfall: '📊',
-  Income: '💶',
   Payday: '🔀',
   Subscriptions: '📱',
+  Settings: '⚙️',
 };
 const TAB_LABELS: Record<keyof MainTabParamList, string> = {
   Waterfall: 'Budget',
-  Income: 'Revenus',
   Payday: 'Répartition',
   Subscriptions: 'Abonnements',
+  Settings: 'Paramètres',
 };
 
 function tabIcon(route: keyof MainTabParamList) {
@@ -115,15 +121,6 @@ function MainTabs() {
         }}
       />
       <Tab.Screen
-        name="Income"
-        component={IncomeScreen}
-        options={{
-          title: TAB_LABELS.Income,
-          tabBarLabel: TAB_LABELS.Income,
-          tabBarIcon: tabIcon('Income'),
-        }}
-      />
-      <Tab.Screen
         name="Payday"
         component={PaydayScreen}
         options={{
@@ -150,6 +147,15 @@ function MainTabs() {
           ),
         }}
       />
+      <Tab.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{
+          title: TAB_LABELS.Settings,
+          tabBarLabel: TAB_LABELS.Settings,
+          tabBarIcon: tabIcon('Settings'),
+        }}
+      />
     </Tab.Navigator>
   );
 }
@@ -162,6 +168,11 @@ function RootNavigatorStack() {
         name="EnvelopeForm"
         component={EnvelopeFormScreen}
         options={{ presentation: 'modal', headerShown: true, title: 'Enveloppe' }}
+      />
+      <RootStack.Screen
+        name="IncomeForm"
+        component={IncomeFormScreen}
+        options={{ presentation: 'modal', headerShown: true, title: 'Revenus' }}
       />
       <RootStack.Screen
         name="PaydayActionForm"

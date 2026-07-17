@@ -171,7 +171,7 @@ export default function PaydayScreen({ navigation }: Props) {
 
   // Pré-remplit le salaire avec le revenu net déclaré de la personne affichée — mais seulement
   // si la valeur numérique diverge (ne pas écraser une saisie ponctuelle en cours), même
-  // principe que IncomeField dans IncomeScreen.tsx. Change de personne : repart d'une ardoise
+  // principe que IncomeField dans IncomeFormScreen.tsx. Change de personne : repart d'une ardoise
   // vierge (les ajustements ponctuels d'un dispatch n'ont pas de sens pour l'autre personne).
   useEffect(() => {
     const numeric = Number(salaryText.replace(',', '.')) || 0;

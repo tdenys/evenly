@@ -34,9 +34,10 @@ export default function WaterfallScreen({ navigation }: Props) {
   const [reorderMode, setReorderMode] = useState(false);
 
   // useFocusEffect (pas useEffect) : native-stack garde cet écran monté en arrière-plan quand
-  // on va sur "Revenus"/"Enveloppe", donc un simple effet "au montage" ne se redéclencherait
-  // pas au retour. refresh() recharge aussi profile/partner (donc leur net_income) — sans ça,
-  // un revenu que le/la partenaire vient de changer resterait affiché comme périmé.
+  // on va sur "Revenus"/"Enveloppe"/un autre onglet, donc un simple effet "au montage" ne se
+  // redéclencherait pas au retour. refresh() recharge aussi profile/partner (donc leur
+  // net_income) — sans ça, un revenu que le/la partenaire vient de changer resterait affiché
+  // comme périmé.
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
@@ -76,6 +77,7 @@ export default function WaterfallScreen({ navigation }: Props) {
           amount={formatAmount(result.totalIncome)}
           alert={summary ? { text: summary.text, variant: summary.isOverflow ? 'danger' : 'warning' } : null}
           variant="hero"
+          onPress={() => navigation.navigate('IncomeForm')}
         />
       </View>
 

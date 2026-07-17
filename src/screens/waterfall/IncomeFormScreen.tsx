@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 import { useStore } from '@/store/useStore';
 import { errorMessage, notify } from '@/lib/alert';
 import { colors, ink, withOpacity } from '@/theme/colors';
@@ -12,60 +11,6 @@ function parseIncome(text: string): number | null {
   return Number.isNaN(parsed) || parsed < 0 ? null : parsed;
 }
 
-interface NameFieldProps {
-  label: string;
-  displayName: string;
-  accent: string;
-  onSave: (displayName: string) => Promise<void>;
-}
-
-/** Le prénom affiché pour une personne — même principe que IncomeField : éditable depuis
- * n'importe quel compte (voir updatePartnerDisplayName), resynchronisé si l'autre appareil le
- * modifie entre-temps. */
-function NameField({ label, displayName, accent, onSave }: NameFieldProps) {
-  const [text, setText] = useState(displayName);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (text !== displayName) setText(displayName);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [displayName]);
-
-  const handleSave = async () => {
-    const trimmed = text.trim();
-    if (trimmed === '') {
-      notify('Prénom invalide', 'Renseigne un prénom.');
-      return;
-    }
-    setSaving(true);
-    try {
-      await onSave(trimmed);
-      notify('Enregistré', 'Le prénom a été mis à jour.');
-    } catch (err) {
-      notify('Erreur', errorMessage(err));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <View style={[styles.card, { backgroundColor: withOpacity(accent, 0.1), borderColor: withOpacity(accent, 0.2) }]}>
-      <View style={styles.cardHeader}>
-        <View style={[styles.dot, { backgroundColor: accent }]} />
-        <Text style={styles.label}>{label}</Text>
-      </View>
-      <TextInput style={styles.input} value={text} onChangeText={setText} autoCapitalize="words" />
-      <Button
-        title={saving ? 'Enregistrement...' : 'Enregistrer'}
-        onPress={() => void handleSave()}
-        disabled={saving}
-        compact
-        color={accent}
-      />
-    </View>
-  );
-}
-
 interface IncomeFieldProps {
   label: string;
   netIncome: number;
@@ -74,9 +19,10 @@ interface IncomeFieldProps {
 }
 
 /** Un salaire éditable — même formulaire pour "mon" revenu et celui du/de la partenaire, les
- * deux étant maintenant modifiables depuis n'importe quel compte. Teinté à l'accent de la
- * personne pour suivre le pattern "Duo bicolore" (jamais "moi"/"partenaire" en couleur, mais
- * Accent A/B, stable). */
+ * deux étant modifiables depuis n'importe quel compte. Teinté à l'accent de la personne pour
+ * suivre le pattern "Duo bicolore" (jamais "moi"/"partenaire" en couleur, mais Accent A/B,
+ * stable). Chaque champ a son propre bouton Enregistrer (pas de bouton global en en-tête) car
+ * les deux revenus sont indépendants. */
 function IncomeField({ label, netIncome, accent, onSave }: IncomeFieldProps) {
   const [text, setText] = useState(String(netIncome));
   const [saving, setSaving] = useState(false);
@@ -126,42 +72,19 @@ function IncomeField({ label, netIncome, accent, onSave }: IncomeFieldProps) {
   );
 }
 
-export default function IncomeScreen() {
+export default function IncomeFormScreen() {
   const profile = useStore((s) => s.profile);
   const partner = useStore((s) => s.partner);
-  const updateMyDisplayName = useStore((s) => s.updateMyDisplayName);
-  const updatePartnerDisplayName = useStore((s) => s.updatePartnerDisplayName);
   const updateMyIncome = useStore((s) => s.updateMyIncome);
   const updatePartnerIncome = useStore((s) => s.updatePartnerIncome);
-  const refresh = useStore((s) => s.refresh);
-
-  // S'assure que les revenus affichés ne sont pas périmés — voir le commentaire équivalent dans
-  // WaterfallScreen sur pourquoi useFocusEffect et pas useEffect.
-  useFocusEffect(
-    useCallback(() => {
-      void refresh();
-    }, [refresh])
-  );
 
   return (
     <View style={styles.container}>
-      <NameField
-        label="Mon prénom"
-        displayName={profile?.displayName ?? ''}
-        accent={colors.accentA}
-        onSave={updateMyDisplayName}
-      />
       <IncomeField
         label="Mon revenu net"
         netIncome={profile?.netIncome ?? 0}
         accent={colors.accentA}
         onSave={updateMyIncome}
-      />
-      <NameField
-        label={`Prénom de ${partner?.displayName ?? 'ton/ta partenaire'}`}
-        displayName={partner?.displayName ?? ''}
-        accent={colors.accentB}
-        onSave={updatePartnerDisplayName}
       />
       <IncomeField
         label={`Revenu de ${partner?.displayName ?? 'ton/ta partenaire'}`}
