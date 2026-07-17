@@ -1,5 +1,16 @@
-import { useRef, useState } from 'react';
-import { Animated, PanResponder, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useRef, useState, type RefObject } from 'react';
+import {
+  Animated,
+  PanResponder,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  type FocusEvent,
+} from 'react-native';
 import type { Amount, Envelope, EnvelopeResult } from '@/core/waterfall/types';
 import { summarizeChildren } from '@/core/waterfall/tree';
 import { formatAmount, formatAmountWithPct, formatPct } from '@/lib/format';
@@ -106,6 +117,10 @@ interface ListProps {
    * actif/inactif et crayon d'édition masqués pendant ce mode pour éviter les taps accidentels
    * en plein glisser. */
   reorderMode: boolean;
+  /** ScrollView parent (WaterfallScreen) — utilisé pour scroller le champ €/% actif au-dessus du
+   * clavier à l'ouverture de l'éditeur inline (KeyboardAvoidingView seul ne recentre pas la
+   * ligne précise, surtout en bas de liste). */
+  scrollViewRef: RefObject<ScrollView | null>;
 }
 
 // Détermine de combien de positions un déplacement vertical (dy, en pixels) fait franchir
@@ -154,6 +169,7 @@ export function SiblingEnvelopeList({
   onUpdateAllocation,
   onDragStateChange,
   reorderMode,
+  scrollViewRef,
 }: ListProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const dragY = useRef(new Animated.Value(0)).current;
@@ -210,6 +226,7 @@ export function SiblingEnvelopeList({
             onLayoutHeight={(height) => heightsRef.current.set(envelope.id, height)}
             dragHandlers={panResponderFor(envelope, index).panHandlers}
             reorderMode={reorderMode}
+            scrollViewRef={scrollViewRef}
           />
         );
       })}
@@ -234,6 +251,7 @@ interface ContainerProps {
   onLayoutHeight: (height: number) => void;
   dragHandlers: ReturnType<typeof PanResponder.create>['panHandlers'];
   reorderMode: boolean;
+  scrollViewRef: RefObject<ScrollView | null>;
 }
 
 function EnvelopeTreeRowContainer({
@@ -253,6 +271,7 @@ function EnvelopeTreeRowContainer({
   onLayoutHeight,
   dragHandlers,
   reorderMode,
+  scrollViewRef,
 }: ContainerProps) {
   const [expanded, setExpanded] = useState(false);
   const [editingAmount, setEditingAmount] = useState(false);
@@ -292,6 +311,14 @@ function EnvelopeTreeRowContainer({
     setLastEdited('pct');
     const n = Number(raw.replace(',', '.'));
     if (!Number.isNaN(n)) setEurText(((n / 100) * parentAmount).toFixed(2));
+  };
+
+  // Fait défiler le ScrollView parent pour que le champ actif reste au-dessus du clavier — sans
+  // ça, un éditeur ouvert en bas de liste se retrouve à moitié (ou totalement) masqué.
+  // `e.nativeEvent.target` est déjà le node handle natif du champ (TargetedEvent), pas besoin de
+  // findNodeHandle.
+  const handleAmountFieldFocus = (e: FocusEvent) => {
+    scrollViewRef.current?.scrollResponderScrollNativeHandleToKeyboard(e.nativeEvent.target, 80, true);
   };
 
   const handleSaveAmount = () => {
@@ -388,6 +415,7 @@ function EnvelopeTreeRowContainer({
               keyboardType="decimal-pad"
               value={eurText}
               onChangeText={handleEurChange}
+              onFocus={handleAmountFieldFocus}
               autoFocus
             />
           </View>
@@ -398,6 +426,7 @@ function EnvelopeTreeRowContainer({
               keyboardType="decimal-pad"
               value={pctText}
               onChangeText={handlePctChange}
+              onFocus={handleAmountFieldFocus}
             />
           </View>
           <View style={styles.amountEditorActions}>
@@ -426,6 +455,7 @@ function EnvelopeTreeRowContainer({
             onUpdateAllocation={onUpdateAllocation}
             onDragStateChange={onDragStateChange}
             reorderMode={reorderMode}
+            scrollViewRef={scrollViewRef}
           />
           {summary && (
             <Text

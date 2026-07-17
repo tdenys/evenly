@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
@@ -34,6 +34,9 @@ export default function WaterfallScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [dragging, setDragging] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
+  // Passé aux lignes pour scroller le champ €/% actif au-dessus du clavier à l'ouverture — le
+  // KeyboardAvoidingView seul ne recentre pas la ligne précise, surtout en bas de liste.
+  const scrollViewRef = useRef<ScrollView>(null);
 
   // useFocusEffect (pas useEffect) : native-stack garde cet écran monté en arrière-plan quand
   // on va sur "Revenus"/"Enveloppe"/un autre onglet, donc un simple effet "au montage" ne se
@@ -115,6 +118,7 @@ export default function WaterfallScreen({ navigation }: Props) {
       </View>
 
       <ScrollView
+        ref={scrollViewRef}
         style={styles.scroll}
         contentContainerStyle={styles.list}
         scrollEnabled={!dragging}
@@ -136,6 +140,7 @@ export default function WaterfallScreen({ navigation }: Props) {
           onUpdateAllocation={handleUpdateAllocation}
           onDragStateChange={setDragging}
           reorderMode={reorderMode}
+          scrollViewRef={scrollViewRef}
         />
       </ScrollView>
     </KeyboardAvoidingView>
