@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { useStore } from '@/store/useStore';
 import { errorMessage, notify } from '@/lib/alert';
+import { checkAndApplyUpdate, getCurrentUpdateInfo } from '@/lib/updates';
 import { colors, ink, withOpacity } from '@/theme/colors';
 import { fonts } from '@/theme/typography';
 import Button from '@/components/ui/Button';
@@ -59,6 +60,54 @@ function NameField({ label, displayName, accent, onSave }: NameFieldProps) {
   );
 }
 
+function describeUpdateStatus(): string {
+  const info = getCurrentUpdateInfo();
+  if (!info) return 'Version de développement';
+  if (info.isEmbeddedLaunch || !info.createdAt) return 'Version installée (dernier build)';
+  return `Mise à jour du ${info.createdAt.toLocaleDateString('fr-FR', {
+    day: 'numeric',
+    month: 'long',
+    hour: '2-digit',
+    minute: '2-digit',
+  })}`;
+}
+
+function UpdateSection() {
+  const [checking, setChecking] = useState(false);
+
+  const handleCheck = async () => {
+    setChecking(true);
+    try {
+      const result = await checkAndApplyUpdate();
+      // 'updated' n'est en pratique jamais lu ici : checkAndApplyUpdate() redémarre l'app
+      // (reloadAsync) avant que cette ligne ne s'exécute si une mise à jour est trouvée.
+      if (result === 'up-to-date') {
+        notify('À jour', "Tu as déjà la dernière version.");
+      } else if (result === 'unavailable') {
+        notify('Indisponible', "Les mises à jour ne sont pas disponibles ici (version de développement).");
+      }
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardHeader}>
+        <Text style={styles.label}>Mises à jour</Text>
+      </View>
+      <Text style={styles.updateStatus}>{describeUpdateStatus()}</Text>
+      <Button
+        title={checking ? 'Vérification...' : 'Vérifier les mises à jour'}
+        onPress={() => void handleCheck()}
+        disabled={checking}
+        variant="outline"
+        compact
+      />
+    </View>
+  );
+}
+
 export default function SettingsScreen() {
   const profile = useStore((s) => s.profile);
   const partner = useStore((s) => s.partner);
@@ -80,6 +129,9 @@ export default function SettingsScreen() {
         accent={colors.accentB}
         onSave={updatePartnerDisplayName}
       />
+
+      <SectionLabel text="Application" />
+      <UpdateSection />
     </View>
   );
 }
@@ -97,7 +149,15 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
     color: ink(0.42),
   },
-  card: { borderRadius: 16, borderWidth: 1.5, padding: 16, gap: 12 },
+  card: {
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.section,
+    padding: 16,
+    gap: 12,
+  },
+  updateStatus: { fontFamily: fonts.karlaMedium, fontSize: 13, color: ink(0.55) },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   label: { fontFamily: fonts.karlaBold, fontSize: 13, color: ink(0.65) },

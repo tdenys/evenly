@@ -17,6 +17,7 @@ import {
 } from '@expo-google-fonts/karla';
 import { RootNavigator, navigationRef } from '@/navigation/RootNavigator';
 import LoadingScreen from '@/components/ui/LoadingScreen';
+import { checkAndApplyUpdate } from '@/lib/updates';
 
 // Sans handler, une notification reçue pendant que l'app est au premier plan ne s'affiche pas
 // du tout — nécessaire pour que le bouton "🔔 Tester" (déclenchement immédiat) soit visible.
@@ -42,6 +43,14 @@ export default function App() {
     Karla_700Bold,
     Karla_800ExtraBold,
   });
+
+  // Vérifie et applique une éventuelle mise à jour OTA dès le lancement — au lieu du
+  // comportement par défaut (téléchargement silencieux, appliqué seulement au lancement
+  // suivant), ce qui évite d'avoir à fermer/relancer l'app 2 fois à l'aveugle. Si une mise à
+  // jour est trouvée, l'app redémarre elle-même (reloadAsync) ; sinon rien ne se passe.
+  useEffect(() => {
+    void checkAndApplyUpdate();
+  }, []);
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
