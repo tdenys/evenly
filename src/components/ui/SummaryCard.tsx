@@ -22,8 +22,10 @@ interface Props {
 export default function SummaryCard({ label, amount, alert, variant = 'secondary', onPress }: Props) {
   const content = (
     <>
-      <Text style={styles.label}>{label}</Text>
-      <Text style={styles.amount}>{amount}</Text>
+      <View style={styles.row}>
+        <Text style={styles.label}>{label}</Text>
+        <Text style={styles.amount}>{amount}</Text>
+      </View>
       {alert && (
         <Text style={[styles.alert, { color: alert.variant === 'danger' ? colors.danger : colors.warning }]}>
           {alert.text}
@@ -58,8 +60,12 @@ export default function SummaryCard({ label, amount, alert, variant = 'secondary
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: 18, padding: 18, alignItems: 'center', gap: 2 },
+  // Ligne label/montant plutôt qu'un empilement centré (libellé, gros montant, alerte) — prend
+  // beaucoup moins de hauteur, laisse plus de place à la liste d'enveloppes qui est le vrai
+  // contenu principal de l'écran.
+  card: { borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16, gap: 4 },
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   label: { fontFamily: fonts.karlaSemiBold, fontSize: 12.5, color: ink(0.6) },
-  amount: { fontFamily: fonts.spectralSemiBold, fontSize: 32, lineHeight: 38, color: colors.ink, marginTop: 2 },
-  alert: { fontFamily: fonts.karlaBold, fontSize: 12, marginTop: 6 },
+  amount: { fontFamily: fonts.spectralSemiBold, fontSize: 22, color: colors.ink },
+  alert: { fontFamily: fonts.karlaBold, fontSize: 11.5 },
 });
