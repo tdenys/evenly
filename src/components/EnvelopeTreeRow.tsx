@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react';
-import { Animated, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, PanResponder, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import type { Amount, Envelope, EnvelopeResult } from '@/core/waterfall/types';
 import { summarizeChildren } from '@/core/waterfall/tree';
 import { formatAmount, formatAmountWithPct, formatPct } from '@/lib/format';
+import { notify } from '@/lib/alert';
 import { personAccent } from '@/lib/couple';
 import { colors, ink } from '@/theme/colors';
 import { fonts } from '@/theme/typography';
@@ -38,12 +39,16 @@ function describeFundedBySegments(fundedBy: Envelope['fundedBy'], personLabels: 
   }
 }
 
+// "fixed"/"percent_envelope" ne répètent plus leur chiffre ici (il vit désormais dans les 2
+// valeurs € (ligne du haut) / % (badge pct, toujours affiché — voir plus bas) affichées côte à
+// côte pour ces 2 types) : le répéter dans la description gaspillerait de la largeur pour une
+// info déjà visible ailleurs sur la ligne.
 function describeAllocation(amount: Amount, personLabels: PersonLabels): string {
   switch (amount.type) {
     case 'fixed':
-      return `${formatAmount(amount.value)} fixe`;
+      return 'Montant fixe';
     case 'percent_envelope':
-      return `${amount.pct}% du revenu`;
+      return '% du revenu';
     case 'percent_remaining':
       return `${amount.pct}% du reste`;
     case 'prorata_income':
@@ -51,11 +56,11 @@ function describeAllocation(amount: Amount, personLabels: PersonLabels): string 
   }
 }
 
-// Le % (calculé sur parentAmount) fait doublon à l'affichage avec le libellé pour
-// percent_envelope/percent_remaining (qui embarquent déjà un pourcentage) — on ne l'affiche
-// séparément que pour fixed/prorata_income, où ce n'est pas déjà dans la description.
-function shouldShowPct(amount: Amount): boolean {
-  return amount.type === 'fixed' || amount.type === 'prorata_income';
+// "fixed"/"percent_envelope" partagent la même base de calcul (parentAmount) donc la conversion
+// €↔% est exacte dans les 2 sens — seuls ces 2 types sont éditables en tapant sur le montant
+// (voir le formulaire complet pour "% du reste"/"prorata revenus", qui restent inchangés).
+function editableAmount(amount: Amount): boolean {
+  return amount.type === 'fixed' || amount.type === 'percent_envelope';
 }
 
 /** Ligne "reste à placer" / avertissement de dépassement sous une liste d'enfants — le
@@ -83,7 +88,7 @@ interface ListProps {
   depth: number;
   /** Pool direct dont ces enveloppes sœurs tirent leur part — le revenu total à la racine, ou
    * le montant de l'enveloppe parente pour des sous-enveloppes. Sert à afficher le % à côté du
-   * montant de chaque ligne. */
+   * montant de chaque ligne, et de base de conversion €↔% dans l'éditeur inline. */
   parentAmount: number;
   getResult: (id: string) => EnvelopeResult | undefined;
   personLabels: PersonLabels;
@@ -91,6 +96,9 @@ interface ListProps {
   onAddChild: (parentId: string) => void;
   onEdit: (envelopeId: string) => void;
   onToggleEnabled: (id: string, enabled: boolean) => void;
+  /** Sauvegarde rapide de l'allocation depuis l'éditeur inline €/% (tap sur le montant) — distinct
+   * de onEdit qui ouvre le formulaire complet. */
+  onUpdateAllocation: (envelopeId: string, allocation: Amount) => void;
   /** Remonté jusqu'à l'écran pour désactiver le ScrollView pendant qu'un glissé est actif —
    * sinon les deux gestes entrent en conflit. */
   onDragStateChange?: (dragging: boolean) => void;
@@ -143,6 +151,7 @@ export function SiblingEnvelopeList({
   onAddChild,
   onEdit,
   onToggleEnabled,
+  onUpdateAllocation,
   onDragStateChange,
   reorderMode,
 }: ListProps) {
@@ -196,6 +205,7 @@ export function SiblingEnvelopeList({
             onAddChild={onAddChild}
             onEdit={onEdit}
             onToggleEnabled={onToggleEnabled}
+            onUpdateAllocation={onUpdateAllocation}
             onDragStateChange={onDragStateChange}
             onLayoutHeight={(height) => heightsRef.current.set(envelope.id, height)}
             dragHandlers={panResponderFor(envelope, index).panHandlers}
@@ -219,6 +229,7 @@ interface ContainerProps {
   onAddChild: (parentId: string) => void;
   onEdit: (envelopeId: string) => void;
   onToggleEnabled: (id: string, enabled: boolean) => void;
+  onUpdateAllocation: (envelopeId: string, allocation: Amount) => void;
   onDragStateChange?: (dragging: boolean) => void;
   onLayoutHeight: (height: number) => void;
   dragHandlers: ReturnType<typeof PanResponder.create>['panHandlers'];
@@ -237,17 +248,70 @@ function EnvelopeTreeRowContainer({
   onAddChild,
   onEdit,
   onToggleEnabled,
+  onUpdateAllocation,
   onDragStateChange,
   onLayoutHeight,
   dragHandlers,
   reorderMode,
 }: ContainerProps) {
   const [expanded, setExpanded] = useState(false);
+  const [editingAmount, setEditingAmount] = useState(false);
+  const [eurText, setEurText] = useState('');
+  const [pctText, setPctText] = useState('');
+  const [lastEdited, setLastEdited] = useState<'eur' | 'pct'>('eur');
+
   const result = getResult(envelope.id);
   const amount = result?.amount ?? 0;
-  const pct = shouldShowPct(envelope.allocation) ? formatPct(amount, parentAmount) : null;
+  // Toujours affiché, quel que soit le type — même pour "% du reste" où c'est un repère
+  // différent du pourcentage embarqué dans le libellé (celui-ci est relatif au reste courant,
+  // celui-ci est relatif au total du pool, comme pour les autres lignes).
+  const pct = formatPct(amount, parentAmount);
   const summary = expanded ? describeChildrenSummary(amount, result?.children ?? []) : null;
   const fundedBySegments = describeFundedBySegments(envelope.fundedBy, personLabels);
+  const canEditAmount = editableAmount(envelope.allocation) && !reorderMode;
+
+  const openAmountEditor = () => {
+    const pctValue = parentAmount > 0 ? (amount / parentAmount) * 100 : 0;
+    setEurText(amount.toFixed(2));
+    setPctText(pctValue.toFixed(2));
+    setLastEdited(envelope.allocation.type === 'percent_envelope' ? 'pct' : 'eur');
+    setEditingAmount(true);
+  };
+
+  const handleEurChange = (raw: string) => {
+    setEurText(raw);
+    setLastEdited('eur');
+    if (parentAmount > 0) {
+      const n = Number(raw.replace(',', '.'));
+      if (!Number.isNaN(n)) setPctText(((n / parentAmount) * 100).toFixed(2));
+    }
+  };
+
+  const handlePctChange = (raw: string) => {
+    setPctText(raw);
+    setLastEdited('pct');
+    const n = Number(raw.replace(',', '.'));
+    if (!Number.isNaN(n)) setEurText(((n / 100) * parentAmount).toFixed(2));
+  };
+
+  const handleSaveAmount = () => {
+    if (lastEdited === 'eur') {
+      const n = Number(eurText.replace(',', '.'));
+      if (Number.isNaN(n) || n < 0) {
+        notify('Montant invalide', 'Renseigne un montant en € valide.');
+        return;
+      }
+      onUpdateAllocation(envelope.id, { type: 'fixed', value: n });
+    } else {
+      const n = Number(pctText.replace(',', '.'));
+      if (Number.isNaN(n) || n < 0) {
+        notify('Pourcentage invalide', 'Renseigne un pourcentage valide.');
+        return;
+      }
+      onUpdateAllocation(envelope.id, { type: 'percent_envelope', pct: n });
+    }
+    setEditingAmount(false);
+  };
 
   return (
     <Animated.View
@@ -267,7 +331,19 @@ function EnvelopeTreeRowContainer({
                 <Text style={styles.label} numberOfLines={1}>
                   {envelope.emoji} {envelope.label}
                 </Text>
-                <Text style={styles.amount}>{formatAmount(amount)}</Text>
+                {canEditAmount ? (
+                  <TouchableOpacity
+                    onPress={openAmountEditor}
+                    hitSlop={6}
+                    {...(Platform.OS === 'web'
+                      ? { onClick: (e: { stopPropagation: () => void }) => e.stopPropagation() }
+                      : null)}
+                  >
+                    <Text style={[styles.amount, styles.amountEditable]}>{formatAmount(amount)}</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={styles.amount}>{formatAmount(amount)}</Text>
+                )}
               </View>
 
               <View style={styles.descriptionRow}>
@@ -303,6 +379,38 @@ function EnvelopeTreeRowContainer({
         )}
       </View>
 
+      {editingAmount && (
+        <View style={[styles.amountEditor, { marginLeft: 16 + depth * 20 }]}>
+          <View style={styles.amountEditorField}>
+            <Text style={styles.amountEditorUnit}>€</Text>
+            <TextInput
+              style={styles.amountEditorInput}
+              keyboardType="decimal-pad"
+              value={eurText}
+              onChangeText={handleEurChange}
+              autoFocus
+            />
+          </View>
+          <View style={styles.amountEditorField}>
+            <Text style={styles.amountEditorUnit}>%</Text>
+            <TextInput
+              style={styles.amountEditorInput}
+              keyboardType="decimal-pad"
+              value={pctText}
+              onChangeText={handlePctChange}
+            />
+          </View>
+          <View style={styles.amountEditorActions}>
+            <TouchableOpacity onPress={() => setEditingAmount(false)} hitSlop={6}>
+              <Text style={styles.amountEditorCancel}>Annuler</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleSaveAmount} hitSlop={6}>
+              <Text style={styles.amountEditorSave}>Enregistrer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       {expanded && (
         <View>
           <SiblingEnvelopeList
@@ -315,6 +423,7 @@ function EnvelopeTreeRowContainer({
             onAddChild={onAddChild}
             onEdit={onEdit}
             onToggleEnabled={onToggleEnabled}
+            onUpdateAllocation={onUpdateAllocation}
             onDragStateChange={onDragStateChange}
             reorderMode={reorderMode}
           />
@@ -375,6 +484,9 @@ const styles = StyleSheet.create({
   chevron: { width: 16, color: ink(0.4) },
   label: { flex: 1, fontFamily: fonts.karlaBold, fontSize: 14, color: colors.ink, flexShrink: 1 },
   amount: { fontFamily: fonts.spectralSemiBold, fontSize: 15, color: colors.ink },
+  // Léger soulignement en pointillé implicite via la couleur primaire — signale que le montant
+  // est tappable sans ajouter d'icône qui mangerait de la largeur.
+  amountEditable: { color: colors.primary },
   descriptionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -386,6 +498,37 @@ const styles = StyleSheet.create({
   pct: { fontFamily: fonts.karlaMedium, fontSize: 11.5, color: ink(0.5), marginLeft: 8 },
   editZone: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   edit: { fontSize: 15 },
+  // Éditeur inline €/% — champs empilés verticalement (pas côte à côte) pour rester robuste à la
+  // largeur quel que soit le niveau d'imbrication (depth), plutôt que de risquer un débordement
+  // horizontal sur les enveloppes profondément nichées.
+  amountEditor: {
+    marginRight: 16,
+    marginTop: 4,
+    marginBottom: 8,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: colors.section,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    gap: 8,
+  },
+  amountEditorField: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  amountEditorUnit: { width: 16, fontFamily: fonts.karlaBold, fontSize: 13, color: ink(0.5) },
+  amountEditorInput: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: colors.borderInput,
+    borderRadius: 10,
+    backgroundColor: colors.surface,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    fontFamily: fonts.spectralSemiBold,
+    fontSize: 14,
+    color: colors.ink,
+  },
+  amountEditorActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 16, marginTop: 2 },
+  amountEditorCancel: { fontFamily: fonts.karlaSemiBold, fontSize: 12.5, color: ink(0.5) },
+  amountEditorSave: { fontFamily: fonts.karlaBold, fontSize: 12.5, color: colors.primary },
   summary: { fontFamily: fonts.karlaBold, fontSize: 12.5, color: colors.warning, paddingVertical: 6 },
   summaryOverflow: { color: colors.danger },
   addChild: { paddingVertical: 10 },

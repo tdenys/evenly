@@ -7,7 +7,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { MainTabParamList, RootStackParamList } from '@/navigation/RootNavigator';
 import { useStore } from '@/store/useStore';
 import { runWaterfall } from '@/core/waterfall/engine';
-import { findEnvelopeResult } from '@/core/waterfall/tree';
+import { findEnvelope, findEnvelopeResult } from '@/core/waterfall/tree';
+import type { Amount } from '@/core/waterfall/types';
 import { describeChildrenSummary, SiblingEnvelopeList } from '@/components/EnvelopeTreeRow';
 import { formatAmount } from '@/lib/format';
 import { errorMessage, notify } from '@/lib/alert';
@@ -29,6 +30,7 @@ export default function WaterfallScreen({ navigation }: Props) {
   const refresh = useStore((s) => s.refresh);
   const reorderEnvelopeTo = useStore((s) => s.reorderEnvelopeTo);
   const setEnvelopeEnabled = useStore((s) => s.setEnvelopeEnabled);
+  const updateEnvelope = useStore((s) => s.updateEnvelope);
   const [loading, setLoading] = useState(true);
   const [dragging, setDragging] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
@@ -69,6 +71,22 @@ export default function WaterfallScreen({ navigation }: Props) {
     setEnvelopeEnabled(id, enabled).catch((err) => notify('Erreur', errorMessage(err)));
   };
 
+  // Sauvegarde rapide depuis l'éditeur inline €/% (tap sur le montant d'une ligne) — updateEnvelope
+  // exige tous les champs, donc on reconstruit l'input à partir de l'enveloppe déjà en mémoire,
+  // seule `allocation` change réellement.
+  const handleUpdateAllocation = (id: string, allocation: Amount) => {
+    const target = findEnvelope(envelopes, id);
+    if (!target) return;
+    updateEnvelope(id, {
+      label: target.label,
+      emoji: target.emoji,
+      priority: target.priority,
+      allocation,
+      enabled: target.enabled,
+      fundedBy: target.fundedBy,
+    }).catch((err) => notify('Erreur', errorMessage(err)));
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.inset}>
@@ -93,6 +111,7 @@ export default function WaterfallScreen({ navigation }: Props) {
         style={styles.scroll}
         contentContainerStyle={styles.list}
         scrollEnabled={!dragging}
+        keyboardShouldPersistTaps="handled"
       >
         {envelopes.length === 0 && !loading && (
           <Text style={[styles.empty, styles.inset]}>Aucune enveloppe pour l'instant.</Text>
@@ -107,6 +126,7 @@ export default function WaterfallScreen({ navigation }: Props) {
           onAddChild={(parentId) => navigation.navigate('EnvelopeForm', { parentId })}
           onEdit={(envelopeId) => navigation.navigate('EnvelopeForm', { envelopeId })}
           onToggleEnabled={handleToggleEnabled}
+          onUpdateAllocation={handleUpdateAllocation}
           onDragStateChange={setDragging}
           reorderMode={reorderMode}
         />
