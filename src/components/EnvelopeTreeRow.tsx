@@ -15,7 +15,6 @@ import type { Amount, Envelope, EnvelopeResult } from '@/core/waterfall/types';
 import { summarizeChildren } from '@/core/waterfall/tree';
 import { formatAmount, formatAmountWithPct, formatPct } from '@/lib/format';
 import { notify } from '@/lib/alert';
-import { personAccent } from '@/lib/couple';
 import { colors, ink } from '@/theme/colors';
 import { fonts } from '@/theme/typography';
 import AppSwitch from '@/components/ui/AppSwitch';
@@ -23,31 +22,6 @@ import AppSwitch from '@/components/ui/AppSwitch';
 export interface PersonLabels {
   A: string;
   B: string;
-}
-
-interface FundedBySegment {
-  text: string;
-  color: string;
-}
-
-/** Segments colorés (Accent A / Accent B) plutôt qu'une seule chaîne — permet de teindre chaque
- * prénom de sa propre couleur de personne, y compris pour "Les deux" (A puis B, sans dégradé de
- * texte : React Native n'a pas de text-fill-gradient natif sans dépendance supplémentaire). */
-function describeFundedBySegments(fundedBy: Envelope['fundedBy'], personLabels: PersonLabels): FundedBySegment[] | null {
-  switch (fundedBy) {
-    case 'A':
-      return [{ text: `💸 ${personLabels.A}`, color: personAccent('A') }];
-    case 'B':
-      return [{ text: `💸 ${personLabels.B}`, color: personAccent('B') }];
-    case 'both':
-      return [
-        { text: `💸 ${personLabels.A}`, color: personAccent('A') },
-        { text: ' + ', color: ink(0.4) },
-        { text: personLabels.B, color: personAccent('B') },
-      ];
-    case null:
-      return null;
-  }
 }
 
 // "fixed"/"percent_envelope" ne répètent plus leur chiffre ici (il vit désormais dans les 2
@@ -288,7 +262,6 @@ function EnvelopeTreeRowContainer({
   // celui-ci est relatif au total du pool, comme pour les autres lignes).
   const pct = formatPct(amount, parentAmount);
   const summary = expanded ? describeChildrenSummary(amount, result?.children ?? []) : null;
-  const fundedBySegments = describeFundedBySegments(envelope.fundedBy, personLabels);
   const canEditAmount = editableAmount(envelope.allocation) && !reorderMode;
 
   const openAmountEditor = () => {
@@ -372,12 +345,6 @@ function EnvelopeTreeRowContainer({
               <View style={styles.descriptionRow}>
                 <Text style={styles.description} numberOfLines={1}>
                   {describeAllocation(envelope.allocation, personLabels)}
-                  {fundedBySegments && ' · '}
-                  {fundedBySegments?.map((seg, i) => (
-                    <Text key={i} style={{ color: seg.color }}>
-                      {seg.text}
-                    </Text>
-                  ))}
                   {!envelope.enabled && ' · Désactivée'}
                 </Text>
                 {pct && <Text style={styles.pct}>{pct}</Text>}
