@@ -270,6 +270,11 @@ function EnvelopeTreeRowContainer({
   const [eurText, setEurText] = useState('');
   const [pctText, setPctText] = useState('');
   const [lastEdited, setLastEdited] = useState<'eur' | 'pct'>('eur');
+  // `autoFocus` sur le TextInput ne suffit pas de façon fiable dans une Modal (le focus() est
+  // souvent appelé avant que la vue native ne soit réellement montée/visible, surtout sur
+  // Android) — on le déclenche plutôt explicitement dans onShow, une fois la Modal réellement
+  // affichée.
+  const eurInputRef = useRef<TextInput>(null);
 
   const result = getResult(envelope.id);
   const amount = result?.amount ?? 0;
@@ -393,7 +398,13 @@ function EnvelopeTreeRowContainer({
       </View>
 
       {canEditAmount && (
-        <Modal visible={editingAmount} transparent animationType="fade" onRequestClose={closeAmountEditor}>
+        <Modal
+          visible={editingAmount}
+          transparent
+          animationType="fade"
+          onRequestClose={closeAmountEditor}
+          onShow={() => eurInputRef.current?.focus()}
+        >
           <KeyboardAvoidingView
             style={styles.modalRoot}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -407,11 +418,11 @@ function EnvelopeTreeRowContainer({
                 <View style={styles.amountEditorField}>
                   <Text style={styles.amountEditorUnit}>€</Text>
                   <TextInput
+                    ref={eurInputRef}
                     style={styles.amountEditorInput}
                     keyboardType="decimal-pad"
                     value={eurText}
                     onChangeText={handleEurChange}
-                    autoFocus
                   />
                 </View>
                 <View style={styles.amountEditorField}>
