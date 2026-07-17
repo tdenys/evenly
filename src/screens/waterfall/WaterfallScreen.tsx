@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
@@ -88,7 +88,14 @@ export default function WaterfallScreen({ navigation }: Props) {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      // L'éditeur inline €/% (tap sur le montant d'une ligne) fait apparaître le clavier — sans
+      // ça, il recouvre la moitié de l'écran et masque les champs qu'on est en train de remplir.
+      // "height" sur Android plutôt que "padding" : redimensionne la zone visible au lieu
+      // d'ajouter un padding qui pousserait le contenu sous la tab bar déjà fixe en bas.
+    >
       <View style={styles.inset}>
         <SummaryCard
           label="Revenu total du couple"
@@ -131,7 +138,7 @@ export default function WaterfallScreen({ navigation }: Props) {
           reorderMode={reorderMode}
         />
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
