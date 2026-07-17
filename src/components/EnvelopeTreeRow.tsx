@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   KeyboardAvoidingView,
@@ -270,11 +270,16 @@ function EnvelopeTreeRowContainer({
   const [eurText, setEurText] = useState('');
   const [pctText, setPctText] = useState('');
   const [lastEdited, setLastEdited] = useState<'eur' | 'pct'>('eur');
-  // `autoFocus` sur le TextInput ne suffit pas de façon fiable dans une Modal (le focus() est
-  // souvent appelé avant que la vue native ne soit réellement montée/visible, surtout sur
-  // Android) — on le déclenche plutôt explicitement dans onShow, une fois la Modal réellement
-  // affichée.
+  // `autoFocus` (et même `onShow` de la Modal, pas fiable sur Android) ne suffit pas toujours à
+  // déclencher le clavier dans une Modal — la fenêtre native du Modal doit avoir fini de
+  // s'attacher avant qu'un focus() ait un effet réel. Un court délai après le montage force le
+  // focus une fois la Modal réellement prête à le recevoir.
   const eurInputRef = useRef<TextInput>(null);
+  useEffect(() => {
+    if (!editingAmount) return;
+    const timeout = setTimeout(() => eurInputRef.current?.focus(), 200);
+    return () => clearTimeout(timeout);
+  }, [editingAmount]);
 
   const result = getResult(envelope.id);
   const amount = result?.amount ?? 0;
@@ -398,13 +403,7 @@ function EnvelopeTreeRowContainer({
       </View>
 
       {canEditAmount && (
-        <Modal
-          visible={editingAmount}
-          transparent
-          animationType="fade"
-          onRequestClose={closeAmountEditor}
-          onShow={() => eurInputRef.current?.focus()}
-        >
+        <Modal visible={editingAmount} transparent animationType="fade" onRequestClose={closeAmountEditor}>
           <KeyboardAvoidingView
             style={styles.modalRoot}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
