@@ -1,15 +1,15 @@
-import { useRef, useState, type RefObject } from 'react';
+import { useRef, useState } from 'react';
 import {
   Animated,
+  KeyboardAvoidingView,
+  Modal,
   PanResponder,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  type FocusEvent,
 } from 'react-native';
 import type { Amount, Envelope, EnvelopeResult } from '@/core/waterfall/types';
 import { summarizeChildren } from '@/core/waterfall/tree';
@@ -99,7 +99,7 @@ interface ListProps {
   depth: number;
   /** Pool direct dont ces enveloppes sœurs tirent leur part — le revenu total à la racine, ou
    * le montant de l'enveloppe parente pour des sous-enveloppes. Sert à afficher le % à côté du
-   * montant de chaque ligne, et de base de conversion €↔% dans l'éditeur inline. */
+   * montant de chaque ligne, et de base de conversion €↔% dans la pop-up d'édition. */
   parentAmount: number;
   getResult: (id: string) => EnvelopeResult | undefined;
   personLabels: PersonLabels;
@@ -107,8 +107,8 @@ interface ListProps {
   onAddChild: (parentId: string) => void;
   onEdit: (envelopeId: string) => void;
   onToggleEnabled: (id: string, enabled: boolean) => void;
-  /** Sauvegarde rapide de l'allocation depuis l'éditeur inline €/% (tap sur le montant) — distinct
-   * de onEdit qui ouvre le formulaire complet. */
+  /** Sauvegarde rapide de l'allocation depuis la pop-up €/% (tap sur le montant) — distinct de
+   * onEdit qui ouvre le formulaire complet. */
   onUpdateAllocation: (envelopeId: string, allocation: Amount) => void;
   /** Remonté jusqu'à l'écran pour désactiver le ScrollView pendant qu'un glissé est actif —
    * sinon les deux gestes entrent en conflit. */
@@ -117,10 +117,6 @@ interface ListProps {
    * actif/inactif et crayon d'édition masqués pendant ce mode pour éviter les taps accidentels
    * en plein glisser. */
   reorderMode: boolean;
-  /** ScrollView parent (WaterfallScreen) — utilisé pour scroller le champ €/% actif au-dessus du
-   * clavier à l'ouverture de l'éditeur inline (KeyboardAvoidingView seul ne recentre pas la
-   * ligne précise, surtout en bas de liste). */
-  scrollViewRef: RefObject<ScrollView | null>;
 }
 
 // Détermine de combien de positions un déplacement vertical (dy, en pixels) fait franchir
@@ -169,7 +165,6 @@ export function SiblingEnvelopeList({
   onUpdateAllocation,
   onDragStateChange,
   reorderMode,
-  scrollViewRef,
 }: ListProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const dragY = useRef(new Animated.Value(0)).current;
@@ -226,7 +221,6 @@ export function SiblingEnvelopeList({
             onLayoutHeight={(height) => heightsRef.current.set(envelope.id, height)}
             dragHandlers={panResponderFor(envelope, index).panHandlers}
             reorderMode={reorderMode}
-            scrollViewRef={scrollViewRef}
           />
         );
       })}
@@ -251,7 +245,6 @@ interface ContainerProps {
   onLayoutHeight: (height: number) => void;
   dragHandlers: ReturnType<typeof PanResponder.create>['panHandlers'];
   reorderMode: boolean;
-  scrollViewRef: RefObject<ScrollView | null>;
 }
 
 function EnvelopeTreeRowContainer({
@@ -271,7 +264,6 @@ function EnvelopeTreeRowContainer({
   onLayoutHeight,
   dragHandlers,
   reorderMode,
-  scrollViewRef,
 }: ContainerProps) {
   const [expanded, setExpanded] = useState(false);
   const [editingAmount, setEditingAmount] = useState(false);
@@ -297,6 +289,8 @@ function EnvelopeTreeRowContainer({
     setEditingAmount(true);
   };
 
+  const closeAmountEditor = () => setEditingAmount(false);
+
   const handleEurChange = (raw: string) => {
     setEurText(raw);
     setLastEdited('eur');
@@ -311,14 +305,6 @@ function EnvelopeTreeRowContainer({
     setLastEdited('pct');
     const n = Number(raw.replace(',', '.'));
     if (!Number.isNaN(n)) setEurText(((n / 100) * parentAmount).toFixed(2));
-  };
-
-  // Fait défiler le ScrollView parent pour que le champ actif reste au-dessus du clavier — sans
-  // ça, un éditeur ouvert en bas de liste se retrouve à moitié (ou totalement) masqué.
-  // `e.nativeEvent.target` est déjà le node handle natif du champ (TargetedEvent), pas besoin de
-  // findNodeHandle.
-  const handleAmountFieldFocus = (e: FocusEvent) => {
-    scrollViewRef.current?.scrollResponderScrollNativeHandleToKeyboard(e.nativeEvent.target, 80, true);
   };
 
   const handleSaveAmount = () => {
@@ -406,38 +392,49 @@ function EnvelopeTreeRowContainer({
         )}
       </View>
 
-      {editingAmount && (
-        <View style={[styles.amountEditor, { marginLeft: 16 + depth * 20 }]}>
-          <View style={styles.amountEditorField}>
-            <Text style={styles.amountEditorUnit}>€</Text>
-            <TextInput
-              style={styles.amountEditorInput}
-              keyboardType="decimal-pad"
-              value={eurText}
-              onChangeText={handleEurChange}
-              onFocus={handleAmountFieldFocus}
-              autoFocus
-            />
-          </View>
-          <View style={styles.amountEditorField}>
-            <Text style={styles.amountEditorUnit}>%</Text>
-            <TextInput
-              style={styles.amountEditorInput}
-              keyboardType="decimal-pad"
-              value={pctText}
-              onChangeText={handlePctChange}
-              onFocus={handleAmountFieldFocus}
-            />
-          </View>
-          <View style={styles.amountEditorActions}>
-            <TouchableOpacity onPress={() => setEditingAmount(false)} hitSlop={6}>
-              <Text style={styles.amountEditorCancel}>Annuler</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleSaveAmount} hitSlop={6}>
-              <Text style={styles.amountEditorSave}>Enregistrer</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+      {canEditAmount && (
+        <Modal visible={editingAmount} transparent animationType="fade" onRequestClose={closeAmountEditor}>
+          <KeyboardAvoidingView
+            style={styles.modalRoot}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
+            <View style={styles.modalBackdrop}>
+              <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeAmountEditor} />
+              <View style={styles.modalCard}>
+                <Text style={styles.modalTitle} numberOfLines={1}>
+                  {envelope.emoji} {envelope.label}
+                </Text>
+                <View style={styles.amountEditorField}>
+                  <Text style={styles.amountEditorUnit}>€</Text>
+                  <TextInput
+                    style={styles.amountEditorInput}
+                    keyboardType="decimal-pad"
+                    value={eurText}
+                    onChangeText={handleEurChange}
+                    autoFocus
+                  />
+                </View>
+                <View style={styles.amountEditorField}>
+                  <Text style={styles.amountEditorUnit}>%</Text>
+                  <TextInput
+                    style={styles.amountEditorInput}
+                    keyboardType="decimal-pad"
+                    value={pctText}
+                    onChangeText={handlePctChange}
+                  />
+                </View>
+                <View style={styles.amountEditorActions}>
+                  <TouchableOpacity onPress={closeAmountEditor} hitSlop={6}>
+                    <Text style={styles.amountEditorCancel}>Annuler</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleSaveAmount} hitSlop={6}>
+                    <Text style={styles.amountEditorSave}>Enregistrer</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
       )}
 
       {expanded && (
@@ -455,7 +452,6 @@ function EnvelopeTreeRowContainer({
             onUpdateAllocation={onUpdateAllocation}
             onDragStateChange={onDragStateChange}
             reorderMode={reorderMode}
-            scrollViewRef={scrollViewRef}
           />
           {summary && (
             <Text
@@ -528,37 +524,43 @@ const styles = StyleSheet.create({
   pct: { fontFamily: fonts.karlaMedium, fontSize: 11.5, color: ink(0.5), marginLeft: 8 },
   editZone: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   edit: { fontSize: 15 },
-  // Éditeur inline €/% — champs empilés verticalement (pas côte à côte) pour rester robuste à la
-  // largeur quel que soit le niveau d'imbrication (depth), plutôt que de risquer un débordement
-  // horizontal sur les enveloppes profondément nichées.
-  amountEditor: {
-    marginRight: 16,
-    marginTop: 4,
-    marginBottom: 8,
-    padding: 10,
-    borderRadius: 12,
-    backgroundColor: colors.section,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    gap: 8,
+  // Pop-up centrée plutôt qu'éditeur inline : garde une taille de champ confortable quel que
+  // soit le niveau d'imbrication (depth) de la ligne, et gère nativement le clavier (pas besoin
+  // de scroller la liste vers la ligne active).
+  modalRoot: { flex: 1 },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(20, 18, 15, 0.45)',
+    padding: 24,
   },
-  amountEditorField: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  amountEditorUnit: { width: 16, fontFamily: fonts.karlaBold, fontSize: 13, color: ink(0.5) },
+  modalCard: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+    padding: 18,
+    gap: 12,
+  },
+  modalTitle: { fontFamily: fonts.karlaBold, fontSize: 15, color: colors.ink, marginBottom: 2 },
+  amountEditorField: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  amountEditorUnit: { width: 18, fontFamily: fonts.karlaBold, fontSize: 14, color: ink(0.5) },
   amountEditorInput: {
     flex: 1,
     borderWidth: 1.5,
     borderColor: colors.borderInput,
-    borderRadius: 10,
-    backgroundColor: colors.surface,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: colors.section,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     fontFamily: fonts.spectralSemiBold,
-    fontSize: 14,
+    fontSize: 16,
     color: colors.ink,
   },
-  amountEditorActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 16, marginTop: 2 },
-  amountEditorCancel: { fontFamily: fonts.karlaSemiBold, fontSize: 12.5, color: ink(0.5) },
-  amountEditorSave: { fontFamily: fonts.karlaBold, fontSize: 12.5, color: colors.primary },
+  amountEditorActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 20, marginTop: 4 },
+  amountEditorCancel: { fontFamily: fonts.karlaSemiBold, fontSize: 13.5, color: ink(0.5) },
+  amountEditorSave: { fontFamily: fonts.karlaBold, fontSize: 13.5, color: colors.primary },
   summary: { fontFamily: fonts.karlaBold, fontSize: 12.5, color: colors.warning, paddingVertical: 6 },
   summaryOverflow: { color: colors.danger },
   addChild: { paddingVertical: 10 },

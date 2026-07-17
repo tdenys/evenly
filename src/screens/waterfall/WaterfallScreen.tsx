@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
@@ -34,9 +34,6 @@ export default function WaterfallScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [dragging, setDragging] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
-  // Passé aux lignes pour scroller le champ €/% actif au-dessus du clavier à l'ouverture — le
-  // KeyboardAvoidingView seul ne recentre pas la ligne précise, surtout en bas de liste.
-  const scrollViewRef = useRef<ScrollView>(null);
 
   // useFocusEffect (pas useEffect) : native-stack garde cet écran monté en arrière-plan quand
   // on va sur "Revenus"/"Enveloppe"/un autre onglet, donc un simple effet "au montage" ne se
@@ -74,7 +71,7 @@ export default function WaterfallScreen({ navigation }: Props) {
     setEnvelopeEnabled(id, enabled).catch((err) => notify('Erreur', errorMessage(err)));
   };
 
-  // Sauvegarde rapide depuis l'éditeur inline €/% (tap sur le montant d'une ligne) — updateEnvelope
+  // Sauvegarde rapide depuis la pop-up €/% (tap sur le montant d'une ligne) — updateEnvelope
   // exige tous les champs, donc on reconstruit l'input à partir de l'enveloppe déjà en mémoire,
   // seule `allocation` change réellement.
   const handleUpdateAllocation = (id: string, allocation: Amount) => {
@@ -91,14 +88,7 @@ export default function WaterfallScreen({ navigation }: Props) {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      // L'éditeur inline €/% (tap sur le montant d'une ligne) fait apparaître le clavier — sans
-      // ça, il recouvre la moitié de l'écran et masque les champs qu'on est en train de remplir.
-      // "height" sur Android plutôt que "padding" : redimensionne la zone visible au lieu
-      // d'ajouter un padding qui pousserait le contenu sous la tab bar déjà fixe en bas.
-    >
+    <View style={styles.container}>
       <View style={styles.inset}>
         <SummaryCard
           label="Revenu total du couple"
@@ -118,7 +108,6 @@ export default function WaterfallScreen({ navigation }: Props) {
       </View>
 
       <ScrollView
-        ref={scrollViewRef}
         style={styles.scroll}
         contentContainerStyle={styles.list}
         scrollEnabled={!dragging}
@@ -140,10 +129,9 @@ export default function WaterfallScreen({ navigation }: Props) {
           onUpdateAllocation={handleUpdateAllocation}
           onDragStateChange={setDragging}
           reorderMode={reorderMode}
-          scrollViewRef={scrollViewRef}
         />
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
