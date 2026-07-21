@@ -261,6 +261,9 @@ function EnvelopeTreeRowContainer({
   // différent du pourcentage embarqué dans le libellé (celui-ci est relatif au reste courant,
   // celui-ci est relatif au total du pool, comme pour les autres lignes).
   const pct = formatPct(amount, parentAmount);
+  // Limité à 2 niveaux (voir "+ Ajouter une sous-enveloppe" masqué au-delà de depth 0) : une
+  // sous-enveloppe ne peut plus rien contenir, donc pas de chevron/dépliage pour elle.
+  const canExpand = depth === 0;
   const summary = expanded ? describeChildrenSummary(amount, result?.children ?? []) : null;
   const canEditAmount = editableAmount(envelope.allocation) && !reorderMode;
 
@@ -309,13 +312,15 @@ function EnvelopeTreeRowContainer({
     setEditingAmount(false);
   };
 
+  const RowWrapper = canExpand ? TouchableOpacity : View;
+
   return (
     <Animated.View
       onLayout={(e) => onLayoutHeight(e.nativeEvent.layout.height)}
       style={isDragging ? [styles.dragging, { transform: [{ translateY: dragY }] }] : undefined}
     >
       <View style={[styles.row, { paddingLeft: 16 + depth * 20 }, !envelope.enabled && styles.rowDisabled]}>
-        <TouchableOpacity style={styles.rowContent} onPress={() => setExpanded((e) => !e)}>
+        <RowWrapper style={styles.rowContent} {...(canExpand ? { onPress: () => setExpanded((e) => !e) } : null)}>
           <View style={styles.rowOuter}>
             {/* Libellé et description forment 2 lignes de même largeur (textBlock) — le montant
                 et le % sont chacun casés en bout de leur ligne, ce qui les aligne verticalement
@@ -323,7 +328,7 @@ function EnvelopeTreeRowContainer({
                 partagés par les 2 lignes plutôt que dupliqués sur une ligne à eux. */}
             <View style={styles.textBlock}>
               <View style={styles.main}>
-                <Text style={styles.chevron}>{expanded ? '▾' : '▸'}</Text>
+                <Text style={styles.chevron}>{canExpand ? (expanded ? '▾' : '▸') : ''}</Text>
                 <Text style={styles.label} numberOfLines={1}>
                   {envelope.emoji} {envelope.label}
                 </Text>
@@ -360,7 +365,7 @@ function EnvelopeTreeRowContainer({
               </>
             )}
           </View>
-        </TouchableOpacity>
+        </RowWrapper>
 
         {reorderMode && (
           <View style={styles.grip} {...dragHandlers}>
