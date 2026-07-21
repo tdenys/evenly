@@ -355,7 +355,7 @@ export default function PaydayScreen({ navigation }: Props) {
         const computed = result.actionResults.find((r) => r.actionId === action.id)?.amount ?? 0;
         const displayText = overrides[action.id] ?? String(computed);
         return (
-          <View key={action.id} style={[styles.row, action.isLinked && styles.rowLinked]}>
+          <View key={action.id} style={styles.row}>
             <View style={styles.rowText}>
               <Text style={styles.rowLabel} numberOfLines={1}>
                 {action.label}
@@ -441,9 +441,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle,
   },
-  // Une action liée à une enveloppe est en lecture seule ici (se modifie depuis Budget) — opacité
-  // réduite pour signaler ce statut, cohérent avec le design.
-  rowLinked: { opacity: 0.6 },
   rowText: { flex: 1 },
   rowLabel: { fontFamily: fonts.karlaBold, fontSize: 14, color: colors.ink },
   rowDescription: { fontFamily: fonts.karlaMedium, fontSize: 11.5, color: ink(0.5), marginTop: 2 },
