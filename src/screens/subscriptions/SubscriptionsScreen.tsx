@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Pencil } from 'lucide-react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
@@ -131,7 +132,7 @@ export default function SubscriptionsScreen({ navigation }: Props) {
             onPress={() => navigation.navigate('SubscriptionForm', { subscriptionId: sub.id })}
             hitSlop={8}
           >
-            <Text style={styles.edit}>✏️</Text>
+            <Pencil size={16} color={ink(0.45)} />
           </TouchableOpacity>
         </View>
       ))}
@@ -171,5 +172,4 @@ const styles = StyleSheet.create({
   rowDescription: { fontFamily: fonts.karlaMedium, fontSize: 11.5, color: ink(0.5), marginTop: 2 },
   rowAmount: { fontFamily: fonts.spectralSemiBold, fontSize: 15, color: colors.ink },
   editZone: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  edit: { fontSize: 15 },
 });

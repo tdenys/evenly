@@ -1,5 +1,6 @@
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { TriangleAlert } from 'lucide-react-native';
 import { colors, ink, personGradient, withOpacity } from '@/theme/colors';
 import { fonts } from '@/theme/typography';
 
@@ -27,9 +28,12 @@ export default function SummaryCard({ label, amount, alert, variant = 'secondary
         <Text style={styles.amount}>{amount}</Text>
       </View>
       {alert && (
-        <Text style={[styles.alert, { color: alert.variant === 'danger' ? colors.danger : colors.warning }]}>
-          {alert.text}
-        </Text>
+        <View style={styles.alertRow}>
+          <TriangleAlert size={12} color={alert.variant === 'danger' ? colors.danger : colors.warning} />
+          <Text style={[styles.alert, { color: alert.variant === 'danger' ? colors.danger : colors.warning }]}>
+            {alert.text}
+          </Text>
+        </View>
       )}
     </>
   );
@@ -67,5 +71,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   label: { fontFamily: fonts.karlaSemiBold, fontSize: 12.5, color: ink(0.6) },
   amount: { fontFamily: fonts.spectralSemiBold, fontSize: 22, color: colors.ink },
+  alertRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   alert: { fontFamily: fonts.karlaBold, fontSize: 11.5 },
 });

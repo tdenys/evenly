@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Text } from 'react-native';
+import { TouchableOpacity } from 'react-native';
 import {
   createNavigationContainerRef,
   NavigationContainer,
@@ -7,6 +7,7 @@ import {
 } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { Plus, Settings as SettingsIcon, Shuffle, Smartphone, Wallet, type LucideIcon } from 'lucide-react-native';
 import { useStore } from '@/store/useStore';
 import { colors, ink } from '@/theme/colors';
 import { fonts } from '@/theme/typography';
@@ -70,11 +71,11 @@ function AuthNavigator() {
   );
 }
 
-const TAB_ICONS: Record<keyof MainTabParamList, string> = {
-  Waterfall: '📊',
-  Payday: '🔀',
-  Subscriptions: '📱',
-  Settings: '⚙️',
+const TAB_ICONS: Record<keyof MainTabParamList, LucideIcon> = {
+  Waterfall: Wallet,
+  Payday: Shuffle,
+  Subscriptions: Smartphone,
+  Settings: SettingsIcon,
 };
 const TAB_LABELS: Record<keyof MainTabParamList, string> = {
   Waterfall: 'Budget',
@@ -84,8 +85,15 @@ const TAB_LABELS: Record<keyof MainTabParamList, string> = {
 };
 
 function tabIcon(route: keyof MainTabParamList) {
-  return ({ focused }: { focused: boolean }) => (
-    <Text style={{ fontSize: 18, opacity: focused ? 1 : 0.4 }}>{TAB_ICONS[route]}</Text>
+  const Icon = TAB_ICONS[route];
+  return ({ color }: { color: string }) => <Icon size={22} color={color} strokeWidth={2} />;
+}
+
+function HeaderAddButton({ onPress, color }: { onPress: () => void; color: string }) {
+  return (
+    <TouchableOpacity onPress={onPress} hitSlop={8} style={{ paddingHorizontal: 16 }}>
+      <Plus size={24} color={color} strokeWidth={2.5} />
+    </TouchableOpacity>
   );
 }
 
@@ -110,13 +118,10 @@ function MainTabs() {
           tabBarLabel: TAB_LABELS.Waterfall,
           tabBarIcon: tabIcon('Waterfall'),
           headerRight: ({ tintColor }) => (
-            <Text
-              accessibilityRole="button"
+            <HeaderAddButton
               onPress={() => navigationRef.navigate('EnvelopeForm', {})}
-              style={{ fontSize: 22, color: tintColor ?? colors.primary, paddingHorizontal: 16 }}
-            >
-              +
-            </Text>
+              color={tintColor ?? colors.primary}
+            />
           ),
         }}
       />
@@ -137,13 +142,10 @@ function MainTabs() {
           tabBarLabel: TAB_LABELS.Subscriptions,
           tabBarIcon: tabIcon('Subscriptions'),
           headerRight: ({ tintColor }) => (
-            <Text
-              accessibilityRole="button"
+            <HeaderAddButton
               onPress={() => navigationRef.navigate('SubscriptionForm', {})}
-              style={{ fontSize: 22, color: tintColor ?? colors.primary, paddingHorizontal: 16 }}
-            >
-              +
-            </Text>
+              color={tintColor ?? colors.primary}
+            />
           ),
         }}
       />

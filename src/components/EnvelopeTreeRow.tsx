@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { ChevronDown, ChevronRight, GripVertical, Pencil, TriangleAlert } from 'lucide-react-native';
 import type { Amount, Envelope, EnvelopeResult } from '@/core/waterfall/types';
 import { summarizeChildren } from '@/core/waterfall/tree';
 import { formatAmount, formatAmountWithPct, formatPct } from '@/lib/format';
@@ -60,7 +61,7 @@ export function describeChildrenSummary(
 ): { text: string; isOverflow: boolean } | null {
   const summary = summarizeChildren(parentAmount, children);
   if (summary.overflow > 0.01) {
-    return { text: `⚠️ ${formatAmountWithPct(summary.overflow, parentAmount)} demandés en trop`, isOverflow: true };
+    return { text: `${formatAmountWithPct(summary.overflow, parentAmount)} demandés en trop`, isOverflow: true };
   }
   if (summary.remaining > 0.01) {
     return { text: `${formatAmountWithPct(summary.remaining, parentAmount)} ${remainingLabel}`, isOverflow: false };
@@ -328,7 +329,14 @@ function EnvelopeTreeRowContainer({
                 partagés par les 2 lignes plutôt que dupliqués sur une ligne à eux. */}
             <View style={styles.textBlock}>
               <View style={styles.main}>
-                <Text style={styles.chevron}>{canExpand ? (expanded ? '▾' : '▸') : ''}</Text>
+                <View style={styles.chevron}>
+                  {canExpand &&
+                    (expanded ? (
+                      <ChevronDown size={15} color={ink(0.4)} />
+                    ) : (
+                      <ChevronRight size={15} color={ink(0.4)} />
+                    ))}
+                </View>
                 <Text style={styles.label} numberOfLines={1}>
                   {envelope.emoji} {envelope.label}
                 </Text>
@@ -360,7 +368,7 @@ function EnvelopeTreeRowContainer({
               <>
                 <AppSwitch value={envelope.enabled} onValueChange={(value) => onToggleEnabled(envelope.id, value)} />
                 <TouchableOpacity style={styles.editZone} onPress={() => onEdit(envelope.id)} hitSlop={8}>
-                  <Text style={styles.edit}>✏️</Text>
+                  <Pencil size={16} color={ink(0.45)} />
                 </TouchableOpacity>
               </>
             )}
@@ -369,7 +377,7 @@ function EnvelopeTreeRowContainer({
 
         {reorderMode && (
           <View style={styles.grip} {...dragHandlers}>
-            <Text style={styles.gripText}>⠿</Text>
+            <GripVertical size={18} color={ink(0.4)} />
           </View>
         )}
       </View>
@@ -436,15 +444,10 @@ function EnvelopeTreeRowContainer({
             reorderMode={reorderMode}
           />
           {summary && (
-            <Text
-              style={[
-                styles.summary,
-                { marginLeft: 16 + (depth + 1) * 20 },
-                summary.isOverflow && styles.summaryOverflow,
-              ]}
-            >
-              {summary.text}
-            </Text>
+            <View style={[styles.summaryRow, { marginLeft: 16 + (depth + 1) * 20 }]}>
+              {summary.isOverflow && <TriangleAlert size={13} color={colors.danger} />}
+              <Text style={[styles.summary, summary.isOverflow && styles.summaryOverflow]}>{summary.text}</Text>
+            </View>
           )}
           {/* Limité à 2 niveaux pour l'instant (enveloppes/sous-enveloppes) — pas de sous-sous-
               enveloppe, donc ce bouton n'apparaît que sur une enveloppe racine (depth 0). */}
@@ -493,7 +496,7 @@ const styles = StyleSheet.create({
   // l'un sous l'autre, sans dupliquer le switch/crayon sur une 3e ligne.
   textBlock: { flex: 1 },
   main: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  chevron: { width: 16, color: ink(0.4) },
+  chevron: { width: 16, alignItems: 'center', justifyContent: 'center' },
   label: { flex: 1, fontFamily: fonts.karlaBold, fontSize: 14, color: colors.ink, flexShrink: 1 },
   amount: { fontFamily: fonts.spectralSemiBold, fontSize: 15, color: colors.ink },
   // Léger soulignement en pointillé implicite via la couleur primaire — signale que le montant
@@ -509,7 +512,6 @@ const styles = StyleSheet.create({
   description: { fontFamily: fonts.karlaMedium, fontSize: 11.5, color: ink(0.5), flexShrink: 1 },
   pct: { fontFamily: fonts.karlaMedium, fontSize: 11.5, color: ink(0.5), marginLeft: 8 },
   editZone: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  edit: { fontSize: 15 },
   // Pop-up centrée plutôt qu'éditeur inline : garde une taille de champ confortable quel que
   // soit le niveau d'imbrication (depth) de la ligne, et gère nativement le clavier (pas besoin
   // de scroller la liste vers la ligne active).
@@ -547,7 +549,8 @@ const styles = StyleSheet.create({
   amountEditorActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 20, marginTop: 4 },
   amountEditorCancel: { fontFamily: fonts.karlaSemiBold, fontSize: 13.5, color: ink(0.5) },
   amountEditorSave: { fontFamily: fonts.karlaBold, fontSize: 13.5, color: colors.primary },
-  summary: { fontFamily: fonts.karlaBold, fontSize: 12.5, color: colors.warning, paddingVertical: 6 },
+  summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 6 },
+  summary: { fontFamily: fonts.karlaBold, fontSize: 12.5, color: colors.warning },
   summaryOverflow: { color: colors.danger },
   addChild: { paddingVertical: 10 },
   addChildText: { fontFamily: fonts.karlaBold, fontSize: 13, color: colors.primary },
@@ -561,5 +564,4 @@ const styles = StyleSheet.create({
     borderLeftWidth: StyleSheet.hairlineWidth,
     borderLeftColor: colors.borderSubtle,
   },
-  gripText: { fontSize: 22, color: ink(0.4) },
 });

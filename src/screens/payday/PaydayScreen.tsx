@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Bell, Pencil, TriangleAlert } from 'lucide-react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
@@ -282,7 +283,7 @@ export default function PaydayScreen({ navigation }: Props) {
   const overflow = round2(totalRequested - salary);
   let summary: { text: string; isOverflow: boolean } | null = null;
   if (overflow > 0.01) {
-    summary = { text: `⚠️ ${formatAmountWithPct(overflow, salary)} demandés en trop`, isOverflow: true };
+    summary = { text: `${formatAmountWithPct(overflow, salary)} demandés en trop`, isOverflow: true };
   } else if (result.remainder > 0.01) {
     summary = { text: `${formatAmountWithPct(result.remainder, salary)} non alloué`, isOverflow: false };
   }
@@ -325,7 +326,7 @@ export default function PaydayScreen({ navigation }: Props) {
                     onPress={() => void handleTestNotification()}
                     hitSlop={4}
                   >
-                    <Text style={styles.bellIcon}>🔔</Text>
+                    <Bell size={18} color={ink(0.5)} />
                   </TouchableOpacity>
                 )}
               </View>
@@ -344,7 +345,10 @@ export default function PaydayScreen({ navigation }: Props) {
       <TextInput style={styles.salaryInput} keyboardType="decimal-pad" value={salaryText} onChangeText={setSalaryText} />
 
       {summary && (
-        <Text style={summary.isOverflow ? styles.overflow : styles.remaining}>{summary.text}</Text>
+        <View style={styles.summaryRow}>
+          {summary.isOverflow && <TriangleAlert size={13} color={colors.danger} />}
+          <Text style={summary.isOverflow ? styles.overflow : styles.remaining}>{summary.text}</Text>
+        </View>
       )}
 
       {displayActions.length === 0 && !loading && (
@@ -386,7 +390,7 @@ export default function PaydayScreen({ navigation }: Props) {
               }
               hitSlop={8}
             >
-              <Text style={styles.edit}>✏️</Text>
+              <Pencil size={16} color={ink(0.45)} />
             </TouchableOpacity>
           </View>
         );
@@ -418,7 +422,6 @@ const styles = StyleSheet.create({
   fieldLabel: { fontFamily: fonts.karlaSemiBold, fontSize: 12.5, color: ink(0.6) },
   stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   bellButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  bellIcon: { fontSize: 18 },
   label: { fontFamily: fonts.karlaSemiBold, fontSize: 12.5, color: ink(0.6) },
   salaryInput: {
     borderWidth: 1.5,
@@ -430,6 +433,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: colors.ink,
   },
+  summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   remaining: { fontFamily: fonts.karlaSemiBold, fontSize: 12.5, color: colors.warning },
   overflow: { fontFamily: fonts.karlaBold, fontSize: 12.5, color: colors.danger },
   empty: { fontFamily: fonts.karlaMedium, textAlign: 'center', color: ink(0.4), marginTop: 32 },
@@ -461,5 +465,4 @@ const styles = StyleSheet.create({
   // visuellement que ce n'est pas éditable ici (ça se change depuis l'écran Budget).
   amountReadOnly: { fontFamily: fonts.spectralSemiBold, fontSize: 15, width: 90, textAlign: 'right', color: colors.ink },
   editZone: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  edit: { fontSize: 15 },
 });

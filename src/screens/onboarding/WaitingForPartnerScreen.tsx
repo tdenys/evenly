@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import { Check, Copy } from 'lucide-react-native';
 import { useStore } from '@/store/useStore';
 import { colors, ink } from '@/theme/colors';
 import { fonts } from '@/theme/typography';
@@ -56,7 +57,8 @@ export default function WaitingForPartnerScreen() {
       </View>
 
       <TouchableOpacity style={styles.copyButton} onPress={() => void handleCopy()}>
-        <Text style={styles.copyButtonText}>{copied ? '✓ Copié' : '📋 Copier le code'}</Text>
+        {copied ? <Check size={14} color={colors.primary} /> : <Copy size={14} color={colors.primary} />}
+        <Text style={styles.copyButtonText}>{copied ? 'Copié' : 'Copier le code'}</Text>
       </TouchableOpacity>
 
       <View style={styles.statusRow}>
@@ -88,6 +90,9 @@ const styles = StyleSheet.create({
   },
   codeChar: { fontFamily: fonts.spectralSemiBold, fontSize: 22, color: colors.primary },
   copyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     alignSelf: 'center',
     borderWidth: 1.5,
     borderColor: colors.primary,

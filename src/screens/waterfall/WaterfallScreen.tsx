@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ArrowUpDown, Check } from 'lucide-react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
@@ -100,9 +101,14 @@ export default function WaterfallScreen({ navigation }: Props) {
       </View>
 
       <View style={[styles.inset, styles.reorderRow]}>
-        <TouchableOpacity onPress={() => setReorderMode((m) => !m)} hitSlop={8}>
+        <TouchableOpacity style={styles.reorderButton} onPress={() => setReorderMode((m) => !m)} hitSlop={8}>
+          {reorderMode ? (
+            <Check size={14} color={colors.primary} />
+          ) : (
+            <ArrowUpDown size={14} color={ink(0.5)} />
+          )}
           <Text style={[styles.reorderToggle, reorderMode && styles.reorderToggleActive]}>
-            {reorderMode ? '✓ Terminer' : '↕ Réordonner'}
+            {reorderMode ? 'Terminer' : 'Réordonner'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -142,6 +148,7 @@ const styles = StyleSheet.create({
   // autres éléments (carte de résumé, boutons) plutôt qu'au conteneur entier.
   inset: { marginHorizontal: 16 },
   reorderRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 14, marginBottom: 4 },
+  reorderButton: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   reorderToggle: { fontFamily: fonts.karlaBold, fontSize: 12.5, color: ink(0.5) },
   reorderToggleActive: { color: colors.primary },
   // Sur mobile web, un pull vers le bas en haut de la liste peut déclencher le "tirer pour
