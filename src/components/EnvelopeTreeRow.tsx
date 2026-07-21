@@ -441,12 +441,16 @@ function EnvelopeTreeRowContainer({
               {summary.text}
             </Text>
           )}
-          <TouchableOpacity
-            style={[styles.addChild, { marginLeft: 16 + (depth + 1) * 20 }]}
-            onPress={() => onAddChild(envelope.id)}
-          >
-            <Text style={styles.addChildText}>+ Ajouter une sous-enveloppe</Text>
-          </TouchableOpacity>
+          {/* Limité à 2 niveaux pour l'instant (enveloppes/sous-enveloppes) — pas de sous-sous-
+              enveloppe, donc ce bouton n'apparaît que sur une enveloppe racine (depth 0). */}
+          {depth === 0 && (
+            <TouchableOpacity
+              style={[styles.addChild, { marginLeft: 16 + (depth + 1) * 20 }]}
+              onPress={() => onAddChild(envelope.id)}
+            >
+              <Text style={styles.addChildText}>+ Ajouter une sous-enveloppe</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </Animated.View>
