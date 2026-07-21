@@ -32,6 +32,7 @@ export default function WaterfallScreen({ navigation }: Props) {
   const reorderEnvelopeTo = useStore((s) => s.reorderEnvelopeTo);
   const setEnvelopeEnabled = useStore((s) => s.setEnvelopeEnabled);
   const updateEnvelope = useStore((s) => s.updateEnvelope);
+  const deleteEnvelope = useStore((s) => s.deleteEnvelope);
   const [loading, setLoading] = useState(true);
   const [dragging, setDragging] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
@@ -88,6 +89,11 @@ export default function WaterfallScreen({ navigation }: Props) {
     }).catch((err) => notify('Erreur', errorMessage(err)));
   };
 
+  // Suppression rapide depuis le menu ⋯ d'une ligne (confirmation déjà faite par l'appelant).
+  const handleDeleteEnvelope = (id: string) => {
+    deleteEnvelope(id).catch((err) => notify('Erreur', errorMessage(err)));
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.inset}>
@@ -133,6 +139,7 @@ export default function WaterfallScreen({ navigation }: Props) {
           onEdit={(envelopeId) => navigation.navigate('EnvelopeForm', { envelopeId })}
           onToggleEnabled={handleToggleEnabled}
           onUpdateAllocation={handleUpdateAllocation}
+          onDelete={handleDeleteEnvelope}
           onDragStateChange={setDragging}
           reorderMode={reorderMode}
         />

@@ -11,14 +11,22 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { ChevronDown, ChevronRight, GripVertical, Pencil, TriangleAlert } from 'lucide-react-native';
+import {
+  ChevronDown,
+  ChevronRight,
+  GripVertical,
+  MoreHorizontal,
+  Pencil,
+  Power,
+  Trash2,
+  TriangleAlert,
+} from 'lucide-react-native';
 import type { Amount, Envelope, EnvelopeResult } from '@/core/waterfall/types';
 import { summarizeChildren } from '@/core/waterfall/tree';
 import { formatAmount, formatAmountWithPct, formatPct } from '@/lib/format';
-import { notify } from '@/lib/alert';
+import { confirmAction, notify } from '@/lib/alert';
 import { colors, ink } from '@/theme/colors';
 import { fonts } from '@/theme/typography';
-import AppSwitch from '@/components/ui/AppSwitch';
 
 export interface PersonLabels {
   A: string;
@@ -85,12 +93,14 @@ interface ListProps {
   /** Sauvegarde rapide de l'allocation depuis la pop-up €/% (tap sur le montant) — distinct de
    * onEdit qui ouvre le formulaire complet. */
   onUpdateAllocation: (envelopeId: string, allocation: Amount) => void;
+  /** Suppression directe depuis le menu ⋯ de la ligne (avec confirmation) — distinct de la
+   * suppression au fond du formulaire complet. */
+  onDelete: (envelopeId: string) => void;
   /** Remonté jusqu'à l'écran pour désactiver le ScrollView pendant qu'un glissé est actif —
    * sinon les deux gestes entrent en conflit. */
   onDragStateChange?: (dragging: boolean) => void;
-  /** Mode réordonnancement dédié : poignée de glisser visible uniquement dans ce mode ; switch
-   * actif/inactif et crayon d'édition masqués pendant ce mode pour éviter les taps accidentels
-   * en plein glisser. */
+  /** Mode réordonnancement dédié : poignée de glisser visible uniquement dans ce mode ; le menu
+   * ⋯ est masqué pendant ce mode pour éviter les taps accidentels en plein glisser. */
   reorderMode: boolean;
 }
 
@@ -138,6 +148,7 @@ export function SiblingEnvelopeList({
   onEdit,
   onToggleEnabled,
   onUpdateAllocation,
+  onDelete,
   onDragStateChange,
   reorderMode,
 }: ListProps) {
@@ -192,6 +203,7 @@ export function SiblingEnvelopeList({
             onEdit={onEdit}
             onToggleEnabled={onToggleEnabled}
             onUpdateAllocation={onUpdateAllocation}
+            onDelete={onDelete}
             onDragStateChange={onDragStateChange}
             onLayoutHeight={(height) => heightsRef.current.set(envelope.id, height)}
             dragHandlers={panResponderFor(envelope, index).panHandlers}
@@ -216,6 +228,7 @@ interface ContainerProps {
   onEdit: (envelopeId: string) => void;
   onToggleEnabled: (id: string, enabled: boolean) => void;
   onUpdateAllocation: (envelopeId: string, allocation: Amount) => void;
+  onDelete: (envelopeId: string) => void;
   onDragStateChange?: (dragging: boolean) => void;
   onLayoutHeight: (height: number) => void;
   dragHandlers: ReturnType<typeof PanResponder.create>['panHandlers'];
@@ -235,6 +248,7 @@ function EnvelopeTreeRowContainer({
   onEdit,
   onToggleEnabled,
   onUpdateAllocation,
+  onDelete,
   onDragStateChange,
   onLayoutHeight,
   dragHandlers,
@@ -242,6 +256,7 @@ function EnvelopeTreeRowContainer({
 }: ContainerProps) {
   const [expanded, setExpanded] = useState(false);
   const [editingAmount, setEditingAmount] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [eurText, setEurText] = useState('');
   const [pctText, setPctText] = useState('');
   const [lastEdited, setLastEdited] = useState<'eur' | 'pct'>('eur');
@@ -313,6 +328,25 @@ function EnvelopeTreeRowContainer({
     setEditingAmount(false);
   };
 
+  const closeMenu = () => setMenuOpen(false);
+
+  const handleToggleFromMenu = () => {
+    onToggleEnabled(envelope.id, !envelope.enabled);
+    closeMenu();
+  };
+
+  const handleEditFromMenu = () => {
+    closeMenu();
+    onEdit(envelope.id);
+  };
+
+  const handleDeleteFromMenu = () => {
+    closeMenu();
+    confirmAction('Supprimer l\'enveloppe', `Supprimer "${envelope.label}" ?`, () => {
+      onDelete(envelope.id);
+    });
+  };
+
   const RowWrapper = canExpand ? TouchableOpacity : View;
 
   return (
@@ -365,12 +399,16 @@ function EnvelopeTreeRowContainer({
             </View>
 
             {!reorderMode && (
-              <>
-                <AppSwitch value={envelope.enabled} onValueChange={(value) => onToggleEnabled(envelope.id, value)} />
-                <TouchableOpacity style={styles.editZone} onPress={() => onEdit(envelope.id)} hitSlop={8}>
-                  <Pencil size={16} color={ink(0.45)} />
-                </TouchableOpacity>
-              </>
+              <TouchableOpacity
+                style={styles.menuZone}
+                onPress={() => setMenuOpen(true)}
+                hitSlop={8}
+                {...(Platform.OS === 'web'
+                  ? { onClick: (e: { stopPropagation: () => void }) => e.stopPropagation() }
+                  : null)}
+              >
+                <MoreHorizontal size={18} color={ink(0.45)} />
+              </TouchableOpacity>
             )}
           </View>
         </RowWrapper>
@@ -427,6 +465,29 @@ function EnvelopeTreeRowContainer({
         </Modal>
       )}
 
+      <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={closeMenu}>
+        <View style={styles.modalBackdrop}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeMenu} />
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle} numberOfLines={1}>
+              {envelope.emoji} {envelope.label}
+            </Text>
+            <TouchableOpacity style={styles.menuOption} onPress={handleToggleFromMenu}>
+              <Power size={17} color={ink(0.6)} />
+              <Text style={styles.menuOptionText}>{envelope.enabled ? 'Désactiver' : 'Activer'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuOption} onPress={handleEditFromMenu}>
+              <Pencil size={17} color={ink(0.6)} />
+              <Text style={styles.menuOptionText}>Éditer</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuOption} onPress={handleDeleteFromMenu}>
+              <Trash2 size={17} color={colors.danger} />
+              <Text style={[styles.menuOptionText, styles.menuOptionDanger]}>Supprimer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {expanded && (
         <View>
           <SiblingEnvelopeList
@@ -440,6 +501,7 @@ function EnvelopeTreeRowContainer({
             onEdit={onEdit}
             onToggleEnabled={onToggleEnabled}
             onUpdateAllocation={onUpdateAllocation}
+            onDelete={onDelete}
             onDragStateChange={onDragStateChange}
             reorderMode={reorderMode}
           />
@@ -511,7 +573,7 @@ const styles = StyleSheet.create({
   },
   description: { fontFamily: fonts.karlaMedium, fontSize: 11.5, color: ink(0.5), flexShrink: 1 },
   pct: { fontFamily: fonts.karlaMedium, fontSize: 11.5, color: ink(0.5), marginLeft: 8 },
-  editZone: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  menuZone: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   // Pop-up centrée plutôt qu'éditeur inline : garde une taille de champ confortable quel que
   // soit le niveau d'imbrication (depth) de la ligne, et gère nativement le clavier (pas besoin
   // de scroller la liste vers la ligne active).
@@ -532,6 +594,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   modalTitle: { fontFamily: fonts.karlaBold, fontSize: 15, color: colors.ink, marginBottom: 2 },
+  menuOption: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
+  menuOptionText: { fontFamily: fonts.karlaSemiBold, fontSize: 14.5, color: colors.ink },
+  menuOptionDanger: { color: colors.danger },
   amountEditorField: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   amountEditorUnit: { width: 18, fontFamily: fonts.karlaBold, fontSize: 14, color: ink(0.5) },
   amountEditorInput: {
