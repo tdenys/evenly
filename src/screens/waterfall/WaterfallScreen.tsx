@@ -11,7 +11,7 @@ import { runWaterfall } from '@/core/waterfall/engine';
 import { findEnvelope, findEnvelopeResult } from '@/core/waterfall/tree';
 import type { Amount } from '@/core/waterfall/types';
 import { describeChildrenSummary, SiblingEnvelopeList } from '@/components/EnvelopeTreeRow';
-import { formatAmount } from '@/lib/format';
+import { formatAmount, formatPct } from '@/lib/format';
 import { errorMessage, notify } from '@/lib/alert';
 import { coupleIncome, coupleLabels } from '@/lib/couple';
 import { colors, ink } from '@/theme/colors';
@@ -51,19 +51,25 @@ export default function WaterfallScreen({ navigation }: Props) {
     }, [loadEnvelopes, refresh])
   );
 
+  const income = profile && partner ? coupleIncome(profile, partner) : { a: 0, b: 0 };
   const result = useMemo(
-    () =>
-      runWaterfall({
-        income: profile && partner ? coupleIncome(profile, partner) : { a: 0, b: 0 },
-        envelopes,
-      }),
-    [envelopes, profile, partner]
+    () => runWaterfall({ income, envelopes }),
+    [income, envelopes]
   );
 
   const getResult = (id: string) => findEnvelopeResult(result.envelopeResults, id);
   const summary = describeChildrenSummary(result.totalIncome, result.envelopeResults, 'non alloué');
 
   const personLabels = coupleLabels(profile, partner);
+  // Détail par personne sous le total — utile pour comprendre d'où viennent les montants
+  // "prorata revenus" (répartis exactement selon ce ratio), pas affiché ailleurs dans l'app.
+  const incomeBreakdown =
+    profile && partner
+      ? [
+          { label: `Salaire ${personLabels.A}`, amount: formatAmount(income.a), pct: formatPct(income.a, result.totalIncome) ?? '0%' },
+          { label: `Salaire ${personLabels.B}`, amount: formatAmount(income.b), pct: formatPct(income.b, result.totalIncome) ?? '0%' },
+        ]
+      : undefined;
 
   const handleReorder = (id: string, targetIndex: number) => {
     reorderEnvelopeTo(id, targetIndex).catch((err) => notify('Erreur', errorMessage(err)));
@@ -100,6 +106,7 @@ export default function WaterfallScreen({ navigation }: Props) {
         <SummaryCard
           label="Revenu total du couple"
           amount={formatAmount(result.totalIncome)}
+          breakdown={incomeBreakdown}
           alert={summary ? { text: summary.text, variant: summary.isOverflow ? 'danger' : 'warning' } : null}
           variant="hero"
           onPress={() => navigation.navigate('IncomeForm')}

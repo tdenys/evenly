@@ -15,8 +15,9 @@ import {
   ChevronDown,
   ChevronRight,
   GripVertical,
-  MoreHorizontal,
+  MoreVertical,
   Pencil,
+  Percent,
   Power,
   Trash2,
   TriangleAlert,
@@ -51,8 +52,8 @@ function describeAllocation(amount: Amount, personLabels: PersonLabels): string 
 }
 
 // "fixed"/"percent_envelope" partagent la même base de calcul (parentAmount) donc la conversion
-// €↔% est exacte dans les 2 sens — seuls ces 2 types sont éditables en tapant sur le montant
-// (voir le formulaire complet pour "% du reste"/"prorata revenus", qui restent inchangés).
+// €↔% est exacte dans les 2 sens — seuls ces 2 types proposent "Modifier le montant" dans le
+// menu ⋯ (voir le formulaire complet pour "% du reste"/"prorata revenus", qui restent inchangés).
 function editableAmount(amount: Amount): boolean {
   return amount.type === 'fixed' || amount.type === 'percent_envelope';
 }
@@ -90,8 +91,8 @@ interface ListProps {
   onAddChild: (parentId: string) => void;
   onEdit: (envelopeId: string) => void;
   onToggleEnabled: (id: string, enabled: boolean) => void;
-  /** Sauvegarde rapide de l'allocation depuis la pop-up €/% (tap sur le montant) — distinct de
-   * onEdit qui ouvre le formulaire complet. */
+  /** Sauvegarde rapide de l'allocation depuis la pop-up €/% (menu ⋯ → "Modifier le montant") —
+   * distinct de onEdit qui ouvre le formulaire complet. */
   onUpdateAllocation: (envelopeId: string, allocation: Amount) => void;
   /** Suppression directe depuis le menu ⋯ de la ligne (avec confirmation) — distinct de la
    * suppression au fond du formulaire complet. */
@@ -335,6 +336,11 @@ function EnvelopeTreeRowContainer({
     closeMenu();
   };
 
+  const handleEditAmountFromMenu = () => {
+    closeMenu();
+    openAmountEditor();
+  };
+
   const handleEditFromMenu = () => {
     closeMenu();
     onEdit(envelope.id);
@@ -359,8 +365,8 @@ function EnvelopeTreeRowContainer({
           <View style={styles.rowOuter}>
             {/* Libellé et description forment 2 lignes de même largeur (textBlock) — le montant
                 et le % sont chacun casés en bout de leur ligne, ce qui les aligne verticalement
-                sans ajouter de 3e ligne : le switch/crayon sont HORS de ce bloc, à droite,
-                partagés par les 2 lignes plutôt que dupliqués sur une ligne à eux. */}
+                sans ajouter de 3e ligne : le menu ⋯ est HORS de ce bloc, à droite, partagé par
+                les 2 lignes plutôt que dupliqué sur une ligne à lui. */}
             <View style={styles.textBlock}>
               <View style={styles.main}>
                 <View style={styles.chevron}>
@@ -374,19 +380,7 @@ function EnvelopeTreeRowContainer({
                 <Text style={styles.label} numberOfLines={1}>
                   {envelope.emoji} {envelope.label}
                 </Text>
-                {canEditAmount ? (
-                  <TouchableOpacity
-                    onPress={openAmountEditor}
-                    hitSlop={6}
-                    {...(Platform.OS === 'web'
-                      ? { onClick: (e: { stopPropagation: () => void }) => e.stopPropagation() }
-                      : null)}
-                  >
-                    <Text style={[styles.amount, styles.amountEditable]}>{formatAmount(amount)}</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <Text style={styles.amount}>{formatAmount(amount)}</Text>
-                )}
+                <Text style={styles.amount}>{formatAmount(amount)}</Text>
               </View>
 
               <View style={styles.descriptionRow}>
@@ -407,7 +401,7 @@ function EnvelopeTreeRowContainer({
                   ? { onClick: (e: { stopPropagation: () => void }) => e.stopPropagation() }
                   : null)}
               >
-                <MoreHorizontal size={18} color={ink(0.45)} />
+                <MoreVertical size={18} color={ink(0.45)} />
               </TouchableOpacity>
             )}
           </View>
@@ -476,6 +470,12 @@ function EnvelopeTreeRowContainer({
               <Power size={17} color={ink(0.6)} />
               <Text style={styles.menuOptionText}>{envelope.enabled ? 'Désactiver' : 'Activer'}</Text>
             </TouchableOpacity>
+            {canEditAmount && (
+              <TouchableOpacity style={styles.menuOption} onPress={handleEditAmountFromMenu}>
+                <Percent size={17} color={ink(0.6)} />
+                <Text style={styles.menuOptionText}>Modifier le montant</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={styles.menuOption} onPress={handleEditFromMenu}>
               <Pencil size={17} color={ink(0.6)} />
               <Text style={styles.menuOptionText}>Éditer</Text>
@@ -555,15 +555,12 @@ const styles = StyleSheet.create({
   rowOuter: { flexDirection: 'row', alignItems: 'center', gap: 0 },
   // Les 2 lignes (libellé+montant, puis description+%) partagent cette même largeur — c'est ce
   // qui garantit que le montant et le %, chacun aligné à droite de sa ligne, tombent exactement
-  // l'un sous l'autre, sans dupliquer le switch/crayon sur une 3e ligne.
+  // l'un sous l'autre, sans dupliquer le menu ⋯ sur une 3e ligne.
   textBlock: { flex: 1 },
   main: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   chevron: { width: 16, alignItems: 'center', justifyContent: 'center' },
   label: { flex: 1, fontFamily: fonts.karlaBold, fontSize: 14, color: colors.ink, flexShrink: 1 },
   amount: { fontFamily: fonts.spectralSemiBold, fontSize: 15, color: colors.ink },
-  // Léger soulignement en pointillé implicite via la couleur primaire — signale que le montant
-  // est tappable sans ajouter d'icône qui mangerait de la largeur.
-  amountEditable: { color: colors.primary },
   descriptionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
