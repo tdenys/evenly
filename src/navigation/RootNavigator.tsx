@@ -7,7 +7,7 @@ import {
 } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Plus, Settings as SettingsIcon, Shuffle, Smartphone, Wallet, type LucideIcon } from 'lucide-react-native';
+import { History, Plus, Settings as SettingsIcon, Shuffle, Smartphone, Wallet, type LucideIcon } from 'lucide-react-native';
 import { useStore } from '@/store/useStore';
 import { colors, ink } from '@/theme/colors';
 import { fonts } from '@/theme/typography';
@@ -23,6 +23,7 @@ import PaydayScreen from '@/screens/payday/PaydayScreen';
 import PaydayActionFormScreen from '@/screens/payday/PaydayActionFormScreen';
 import SubscriptionsScreen from '@/screens/subscriptions/SubscriptionsScreen';
 import SubscriptionFormScreen from '@/screens/subscriptions/SubscriptionFormScreen';
+import HistoryScreen from '@/screens/history/HistoryScreen';
 import SettingsScreen from '@/screens/settings/SettingsScreen';
 
 export type AuthStackParamList = {
@@ -30,15 +31,16 @@ export type AuthStackParamList = {
   SignUp: undefined;
 };
 
-// Les 4 sections principales, désormais des onglets persistants plutôt qu'une pile classique.
+// Les 5 sections principales, désormais des onglets persistants plutôt qu'une pile classique.
 // Revenus n'est plus un onglet à part : c'est un modal atteint depuis la carte "Revenu total du
 // couple" sur Budget (voir IncomeForm ci-dessous) — les revenus se modifient rarement, contrairement
-// aux 4 onglets "contenu qu'on consulte". Paramètres est le 4e onglet, réservé au réglages de
-// compte (prénoms pour l'instant), volontairement placé tout à droite.
+// aux onglets "contenu qu'on consulte". Paramètres reste le dernier onglet, réservé au réglages de
+// compte (prénoms, comptes, mises à jour), volontairement placé tout à droite.
 export type MainTabParamList = {
   Waterfall: undefined;
   Payday: undefined;
   Subscriptions: undefined;
+  History: undefined;
   Settings: undefined;
 };
 
@@ -75,12 +77,14 @@ const TAB_ICONS: Record<keyof MainTabParamList, LucideIcon> = {
   Waterfall: Wallet,
   Payday: Shuffle,
   Subscriptions: Smartphone,
+  History: History,
   Settings: SettingsIcon,
 };
 const TAB_LABELS: Record<keyof MainTabParamList, string> = {
   Waterfall: 'Budget',
   Payday: 'Répartition',
   Subscriptions: 'Abonnements',
+  History: 'Historique',
   Settings: 'Paramètres',
 };
 
@@ -147,6 +151,15 @@ function MainTabs() {
               color={tintColor ?? colors.primary}
             />
           ),
+        }}
+      />
+      <Tab.Screen
+        name="History"
+        component={HistoryScreen}
+        options={{
+          title: TAB_LABELS.History,
+          tabBarLabel: TAB_LABELS.History,
+          tabBarIcon: tabIcon('History'),
         }}
       />
       <Tab.Screen

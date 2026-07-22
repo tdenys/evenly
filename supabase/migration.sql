@@ -400,3 +400,32 @@ grant select, insert, update, delete on accounts to authenticated;
 -- compte ne doit jamais supprimer les actions qui pointaient dessus — elles perdent juste leur
 -- compte affiché (redevient "Aucun"), l'utilisateur peut leur en réassigner un autre ensuite.
 alter table payday_actions add column account_id uuid references accounts(id) on delete set null;
+
+-- ============================================================
+-- V2 — Historique budgétaire (snapshots mensuels du Waterfall)
+-- ============================================================
+
+create table budget_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  couple_id uuid not null references couples(id),
+  period date not null, -- 1er jour du mois clôturé, ex: '2026-07-01'
+  total_income numeric not null,
+  income_a numeric not null,
+  income_b numeric not null,
+  envelopes jsonb not null, -- arbre EnvelopeSnapshot[] figé (label/emoji/montant au moment T)
+  created_at timestamptz not null default now(),
+  unique (couple_id, period)
+);
+
+alter table budget_snapshots enable row level security;
+
+create policy "select couple budget_snapshots" on budget_snapshots
+  for select to authenticated using (couple_id = auth_couple_id());
+create policy "insert couple budget_snapshots" on budget_snapshots
+  for insert to authenticated with check (couple_id = auth_couple_id());
+create policy "update couple budget_snapshots" on budget_snapshots
+  for update to authenticated using (couple_id = auth_couple_id());
+create policy "delete couple budget_snapshots" on budget_snapshots
+  for delete to authenticated using (couple_id = auth_couple_id());
+
+grant select, insert, update, delete on budget_snapshots to authenticated;

@@ -2,10 +2,13 @@ import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
 import type { Amount, Envelope } from '@/core/waterfall/types';
 import { findSiblings } from '@/core/waterfall/tree';
+import { runWaterfall } from '@/core/waterfall/engine';
 import type { PaydayAction, PaydayAmount } from '@/core/payday/types';
 import type { Subscription, SubscriptionFrequency } from '@/core/subscriptions/types';
 import type { Account } from '@/core/accounts/types';
-import { orderCouple } from '@/lib/couple';
+import type { BudgetSnapshot } from '@/core/history/types';
+import { buildEnvelopeSnapshot } from '@/core/history/buildSnapshot';
+import { orderCouple, coupleIncome } from '@/lib/couple';
 
 // accountId, comme ownerId, est une FK vers une autre table (accounts) — bolted-on ici plutôt
 // que dans le type pur PaydayAction, qui n'a aucun usage pour ni l'un ni l'autre (voir
@@ -36,6 +39,7 @@ interface StoreState {
   paydayActions: PaydayActionRow[];
   subscriptions: Subscription[];
   accounts: Account[];
+  history: BudgetSnapshot[];
   error: string | null;
 
   init: () => void;
@@ -120,6 +124,9 @@ interface StoreState {
   createAccount: (label: string) => Promise<void>;
   updateAccount: (id: string, label: string) => Promise<void>;
   deleteAccount: (id: string) => Promise<void>;
+  loadHistory: () => Promise<void>;
+  closeCurrentMonth: () => Promise<void>;
+  deleteSnapshot: (id: string) => Promise<void>;
 }
 
 const INVITE_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -141,6 +148,7 @@ export const useStore = create<StoreState>((set, get) => ({
   paydayActions: [],
   subscriptions: [],
   accounts: [],
+  history: [],
   error: null,
 
   init: () => {
@@ -155,6 +163,7 @@ export const useStore = create<StoreState>((set, get) => ({
           paydayActions: [],
           subscriptions: [],
           accounts: [],
+          history: [],
         });
         return;
       }
@@ -605,6 +614,68 @@ export const useStore = create<StoreState>((set, get) => ({
 
     await get().loadAccounts();
     await get().loadPaydayActions();
+  },
+
+  loadHistory: async () => {
+    const { couple } = get();
+    if (!couple) return;
+
+    const { data, error } = await supabase
+      .from('budget_snapshots')
+      .select('id, period, total_income, income_a, income_b, envelopes')
+      .eq('couple_id', couple.id)
+      .order('period', { ascending: false });
+    if (error) throw error;
+
+    const history: BudgetSnapshot[] = (data ?? []).map((row) => ({
+      id: row.id,
+      period: row.period,
+      totalIncome: Number(row.total_income),
+      incomeA: Number(row.income_a),
+      incomeB: Number(row.income_b),
+      envelopes: row.envelopes as BudgetSnapshot['envelopes'],
+    }));
+
+    set({ history });
+  },
+
+  // Clôturer un mois est un upsert (pas le split create/update habituel des autres domaines) :
+  // l'opération est idempotente par mois — re-clôturer le mois courant remplace simplement le
+  // snapshot précédent pour ce `period` plutôt que d'échouer ou de dupliquer une ligne.
+  closeCurrentMonth: async () => {
+    const { couple, profile, partner, envelopes } = get();
+    if (!couple || !profile || !partner) throw new Error('Aucun couple actif.');
+
+    const income = coupleIncome(profile, partner);
+    const result = runWaterfall({ income, envelopes });
+    const envelopeSnapshot = buildEnvelopeSnapshot(envelopes, result.envelopeResults);
+
+    // Mois calendaire local (pas UTC) : un `new Date().toISOString()` pourrait faire basculer
+    // le mois autour de minuit selon le fuseau de l'appareil.
+    const now = new Date();
+    const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+
+    const { error } = await supabase.from('budget_snapshots').upsert(
+      {
+        couple_id: couple.id,
+        period,
+        total_income: result.totalIncome,
+        income_a: income.a,
+        income_b: income.b,
+        envelopes: envelopeSnapshot,
+      },
+      { onConflict: 'couple_id,period' }
+    );
+    if (error) throw error;
+
+    await get().loadHistory();
+  },
+
+  deleteSnapshot: async (id) => {
+    const { error } = await supabase.from('budget_snapshots').delete().eq('id', id);
+    if (error) throw error;
+
+    await get().loadHistory();
   },
 }));
 
