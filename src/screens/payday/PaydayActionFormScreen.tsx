@@ -21,6 +21,7 @@ export default function PaydayActionFormScreen({ route, navigation }: Props) {
   const partner = useStore((s) => s.partner);
   const envelopes = useStore((s) => s.envelopes);
   const paydayActions = useStore((s) => s.paydayActions);
+  const accounts = useStore((s) => s.accounts);
   const createPaydayAction = useStore((s) => s.createPaydayAction);
   const updatePaydayAction = useStore((s) => s.updatePaydayAction);
   const deletePaydayAction = useStore((s) => s.deletePaydayAction);
@@ -48,6 +49,7 @@ export default function PaydayActionFormScreen({ route, navigation }: Props) {
   const [amount, setAmount] = useState<ManualPaydayAmount>(
     existing && existing.amount.type !== 'envelope' ? existing.amount : { type: 'fixed', value: 0 }
   );
+  const [accountId, setAccountId] = useState<string | null>(existing?.accountId ?? null);
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -66,6 +68,7 @@ export default function PaydayActionFormScreen({ route, navigation }: Props) {
         description: description.trim(),
         priority,
         amount: existing && isLinked ? existing.amount : amount,
+        accountId,
       };
       if (existing) {
         await updatePaydayAction(existing.id, input);
@@ -108,7 +111,7 @@ export default function PaydayActionFormScreen({ route, navigation }: Props) {
         </TouchableOpacity>
       ),
     });
-  }, [navigation, existing, saving, ownerId, label, description, priority, amount]);
+  }, [navigation, existing, saving, ownerId, label, description, priority, amount, accountId]);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -151,6 +154,20 @@ export default function PaydayActionFormScreen({ route, navigation }: Props) {
           </Text>
         ) : (
           <PaydayAmountEditor value={amount} onChange={setAmount} />
+        )}
+      </SectionCard>
+
+      {/* Indépendant du calcul du montant : une action liée à une enveloppe a quand même une
+          destination réelle, donc affiché même si isLinked. */}
+      <SectionCard label="Compte">
+        <ChipRow>
+          <Chip label="Aucun" selected={accountId === null} onPress={() => setAccountId(null)} />
+          {accounts.map((acc) => (
+            <Chip key={acc.id} label={acc.label} selected={accountId === acc.id} onPress={() => setAccountId(acc.id)} />
+          ))}
+        </ChipRow>
+        {accounts.length === 0 && (
+          <Text style={styles.linkedHint}>Aucun compte configuré — ajoute-en un depuis Paramètres.</Text>
         )}
       </SectionCard>
 

@@ -53,6 +53,7 @@ interface DisplayAction {
   label: string;
   description: string; // note libre saisie par l'utilisateur (peut être vide)
   amountDescription: string; // texte auto-généré à partir du type de montant
+  accountLabel: string | null;
   priority: number;
   isLinked: boolean;
   runtimeAmount: PaydayAmount; // ce qui est réellement passé à runPayday (résolu si lié)
@@ -63,8 +64,10 @@ export default function PaydayScreen({ navigation }: Props) {
   const partner = useStore((s) => s.partner);
   const envelopes = useStore((s) => s.envelopes);
   const paydayActions = useStore((s) => s.paydayActions);
+  const accounts = useStore((s) => s.accounts);
   const loadEnvelopes = useStore((s) => s.loadEnvelopes);
   const loadPaydayActions = useStore((s) => s.loadPaydayActions);
+  const loadAccounts = useStore((s) => s.loadAccounts);
   const refresh = useStore((s) => s.refresh);
   const [loading, setLoading] = useState(true);
   const [viewedOwnerId, setViewedOwnerId] = useState<string | null>(null);
@@ -80,10 +83,10 @@ export default function PaydayScreen({ navigation }: Props) {
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
-      Promise.all([loadEnvelopes(), loadPaydayActions(), refresh()])
+      Promise.all([loadEnvelopes(), loadPaydayActions(), loadAccounts(), refresh()])
         .catch((err) => notify('Erreur', errorMessage(err)))
         .finally(() => setLoading(false));
-    }, [loadEnvelopes, loadPaydayActions, refresh])
+    }, [loadEnvelopes, loadPaydayActions, loadAccounts, refresh])
   );
 
   // Reprogramme silencieusement le rappel local si MON jour enregistré a changé — que ce soit
@@ -202,6 +205,9 @@ export default function PaydayScreen({ navigation }: Props) {
   const displayActions: DisplayAction[] = useMemo(
     () =>
       actionsForOwner.map((action) => {
+        const accountLabel = action.accountId
+          ? (accounts.find((a) => a.id === action.accountId)?.label ?? null)
+          : null;
         if (action.amount.type !== 'envelope') {
           return {
             id: action.id,
@@ -209,6 +215,7 @@ export default function PaydayScreen({ navigation }: Props) {
             label: action.label,
             description: action.description,
             amountDescription: describeManualAmount(action.amount),
+            accountLabel,
             priority: action.priority,
             isLinked: false,
             runtimeAmount: action.amount,
@@ -222,6 +229,7 @@ export default function PaydayScreen({ navigation }: Props) {
             label: action.label,
             description: action.description,
             amountDescription: 'Enveloppe supprimée',
+            accountLabel,
             priority: action.priority,
             isLinked: true,
             runtimeAmount: { type: 'fixed', value: 0 },
@@ -235,12 +243,13 @@ export default function PaydayScreen({ navigation }: Props) {
           label: action.label,
           description: action.description,
           amountDescription: `Suit l'enveloppe ${envelope.emoji} ${envelope.label}`,
+          accountLabel,
           priority: action.priority,
           isLinked: true,
           runtimeAmount: resolveEnvelopeAmount(envelope.allocation, envelopeAmount * share),
         };
       }),
-    [actionsForOwner, envelopes, waterfallResult, shareForViewedOwner]
+    [actionsForOwner, envelopes, waterfallResult, shareForViewedOwner, accounts]
   );
 
   const overridesNumeric = useMemo(() => {
@@ -351,7 +360,9 @@ export default function PaydayScreen({ navigation }: Props) {
               <Text style={styles.rowLabel} numberOfLines={1}>
                 {action.label}
               </Text>
-              <Text style={styles.rowDescription}>{action.amountDescription}</Text>
+              <Text style={styles.rowDescription}>
+                {action.accountLabel ? `${action.amountDescription} · ${action.accountLabel}` : action.amountDescription}
+              </Text>
               {action.description !== '' && (
                 <Text style={styles.rowNote} numberOfLines={2}>
                   {action.description}

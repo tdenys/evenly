@@ -365,3 +365,38 @@ end;
 $$;
 
 grant execute on function update_partner_display_name(text) to authenticated;
+
+-- ============================================================
+-- V2 — Comptes de destination (liste paramétrable par l'utilisateur)
+-- ============================================================
+
+create table accounts (
+  id uuid primary key default gen_random_uuid(),
+  couple_id uuid not null references couples(id),
+  label text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table accounts enable row level security;
+
+-- Policies larges comme subscriptions/envelopes/payday_actions : n'importe quel membre du
+-- couple gère tous les comptes.
+create policy "select couple accounts" on accounts
+  for select to authenticated using (couple_id = auth_couple_id());
+create policy "insert couple accounts" on accounts
+  for insert to authenticated with check (couple_id = auth_couple_id());
+create policy "update couple accounts" on accounts
+  for update to authenticated using (couple_id = auth_couple_id());
+create policy "delete couple accounts" on accounts
+  for delete to authenticated using (couple_id = auth_couple_id());
+
+grant select, insert, update, delete on accounts to authenticated;
+
+-- ============================================================
+-- V2 — Lier un compte de destination à une action Payday
+-- ============================================================
+
+-- Nullable + on delete set null : contrairement à envelopes.parent_id (cascade), supprimer un
+-- compte ne doit jamais supprimer les actions qui pointaient dessus — elles perdent juste leur
+-- compte affiché (redevient "Aucun"), l'utilisateur peut leur en réassigner un autre ensuite.
+alter table payday_actions add column account_id uuid references accounts(id) on delete set null;

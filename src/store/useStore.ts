@@ -4,9 +4,13 @@ import type { Amount, Envelope } from '@/core/waterfall/types';
 import { findSiblings } from '@/core/waterfall/tree';
 import type { PaydayAction, PaydayAmount } from '@/core/payday/types';
 import type { Subscription, SubscriptionFrequency } from '@/core/subscriptions/types';
+import type { Account } from '@/core/accounts/types';
 import { orderCouple } from '@/lib/couple';
 
-export type PaydayActionRow = PaydayAction & { ownerId: string };
+// accountId, comme ownerId, est une FK vers une autre table (accounts) — bolted-on ici plutôt
+// que dans le type pur PaydayAction, qui n'a aucun usage pour ni l'un ni l'autre (voir
+// src/core/payday/engine.ts, qui ne lit que id/priority/amount).
+export type PaydayActionRow = PaydayAction & { ownerId: string; accountId: string | null };
 
 export interface Profile {
   id: string;
@@ -31,6 +35,7 @@ interface StoreState {
   envelopes: Envelope[];
   paydayActions: PaydayActionRow[];
   subscriptions: Subscription[];
+  accounts: Account[];
   error: string | null;
 
   init: () => void;
@@ -77,10 +82,18 @@ interface StoreState {
     description: string;
     priority: number;
     amount: PaydayAmount;
+    accountId: string | null;
   }) => Promise<void>;
   updatePaydayAction: (
     id: string,
-    input: { ownerId: string; label: string; description: string; priority: number; amount: PaydayAmount }
+    input: {
+      ownerId: string;
+      label: string;
+      description: string;
+      priority: number;
+      amount: PaydayAmount;
+      accountId: string | null;
+    }
   ) => Promise<void>;
   deletePaydayAction: (id: string) => Promise<void>;
   reorderPaydayActionTo: (id: string, targetIndex: number) => Promise<void>;
@@ -103,6 +116,10 @@ interface StoreState {
     }
   ) => Promise<void>;
   deleteSubscription: (id: string) => Promise<void>;
+  loadAccounts: () => Promise<void>;
+  createAccount: (label: string) => Promise<void>;
+  updateAccount: (id: string, label: string) => Promise<void>;
+  deleteAccount: (id: string) => Promise<void>;
 }
 
 const INVITE_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -123,6 +140,7 @@ export const useStore = create<StoreState>((set, get) => ({
   envelopes: [],
   paydayActions: [],
   subscriptions: [],
+  accounts: [],
   error: null,
 
   init: () => {
@@ -136,6 +154,7 @@ export const useStore = create<StoreState>((set, get) => ({
           envelopes: [],
           paydayActions: [],
           subscriptions: [],
+          accounts: [],
         });
         return;
       }
@@ -397,7 +416,7 @@ export const useStore = create<StoreState>((set, get) => ({
 
     const { data, error } = await supabase
       .from('payday_actions')
-      .select('id, owner, label, description, priority, amount')
+      .select('id, owner, label, description, priority, amount, account_id')
       .eq('couple_id', couple.id)
       .order('priority', { ascending: true });
     if (error) throw error;
@@ -409,6 +428,7 @@ export const useStore = create<StoreState>((set, get) => ({
       description: row.description,
       priority: row.priority,
       amount: row.amount as PaydayAmount,
+      accountId: row.account_id,
     }));
 
     set({ paydayActions });
@@ -425,6 +445,7 @@ export const useStore = create<StoreState>((set, get) => ({
       description: input.description,
       priority: input.priority,
       amount: input.amount,
+      account_id: input.accountId,
     });
     if (error) throw error;
 
@@ -440,6 +461,7 @@ export const useStore = create<StoreState>((set, get) => ({
         description: input.description,
         priority: input.priority,
         amount: input.amount,
+        account_id: input.accountId,
       })
       .eq('id', id);
     if (error) throw error;
@@ -540,6 +562,50 @@ export const useStore = create<StoreState>((set, get) => ({
 
     await get().loadSubscriptions();
   },
+
+  loadAccounts: async () => {
+    const { couple } = get();
+    if (!couple) return;
+
+    const { data, error } = await supabase
+      .from('accounts')
+      .select('id, label')
+      .eq('couple_id', couple.id)
+      .order('label', { ascending: true });
+    if (error) throw error;
+
+    const accounts: Account[] = (data ?? []).map((row) => ({ id: row.id, label: row.label }));
+
+    set({ accounts });
+  },
+
+  createAccount: async (label) => {
+    const { couple } = get();
+    if (!couple) throw new Error('Aucun couple actif.');
+
+    const { error } = await supabase.from('accounts').insert({ couple_id: couple.id, label });
+    if (error) throw error;
+
+    await get().loadAccounts();
+  },
+
+  updateAccount: async (id, label) => {
+    const { error } = await supabase.from('accounts').update({ label }).eq('id', id);
+    if (error) throw error;
+
+    await get().loadAccounts();
+  },
+
+  deleteAccount: async (id) => {
+    // La colonne payday_actions.account_id est "on delete set null" côté DB — supprimer un
+    // compte ne supprime jamais les actions qui pointaient dessus, elles repassent juste à
+    // "Aucun" (voir supabase/migration.sql).
+    const { error } = await supabase.from('accounts').delete().eq('id', id);
+    if (error) throw error;
+
+    await get().loadAccounts();
+    await get().loadPaydayActions();
+  },
 }));
 
 /** Réconcilie les payday_actions "référence vivante" (amount.type === 'envelope') d'une
@@ -584,6 +650,8 @@ async function syncPaydayActionsForEnvelope(
     ...toCreateOwnerIds.map((ownerId) => {
       const ownerActions = paydayActions.filter((a) => a.ownerId === ownerId);
       const nextPriority = ownerActions.length > 0 ? Math.max(...ownerActions.map((a) => a.priority)) + 1 : 1;
+      // account_id volontairement omis : une action auto-créée par un lien d'enveloppe démarre
+      // sans compte (NULL par défaut), l'utilisateur en choisit un ensuite depuis le formulaire.
       return supabase.from('payday_actions').insert({
         couple_id: couple.id,
         owner: ownerId,

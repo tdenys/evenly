@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Trash2 } from 'lucide-react-native';
 import { useStore } from '@/store/useStore';
-import { errorMessage, notify } from '@/lib/alert';
+import { confirmAction, errorMessage, notify } from '@/lib/alert';
 import { checkAndApplyUpdate, getCurrentUpdateInfo } from '@/lib/updates';
 import { colors, ink, withOpacity } from '@/theme/colors';
 import { fonts } from '@/theme/typography';
@@ -108,6 +109,67 @@ function UpdateSection() {
   );
 }
 
+function AccountsSection() {
+  const accounts = useStore((s) => s.accounts);
+  const loadAccounts = useStore((s) => s.loadAccounts);
+  const createAccount = useStore((s) => s.createAccount);
+  const deleteAccount = useStore((s) => s.deleteAccount);
+  const [newLabel, setNewLabel] = useState('');
+  const [adding, setAdding] = useState(false);
+
+  useEffect(() => {
+    void loadAccounts();
+  }, [loadAccounts]);
+
+  const handleAdd = async () => {
+    const trimmed = newLabel.trim();
+    if (trimmed === '') return;
+    setAdding(true);
+    try {
+      await createAccount(trimmed);
+      setNewLabel('');
+    } catch (err) {
+      notify('Erreur', errorMessage(err));
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleDelete = (id: string, label: string) => {
+    confirmAction('Supprimer le compte', `Supprimer "${label}" ?`, async () => {
+      try {
+        await deleteAccount(id);
+      } catch (err) {
+        notify('Erreur', errorMessage(err));
+      }
+    });
+  };
+
+  return (
+    <View style={styles.card}>
+      {accounts.map((acc) => (
+        <View key={acc.id} style={styles.accountRow}>
+          <Text style={styles.accountLabel} numberOfLines={1}>
+            {acc.label}
+          </Text>
+          <TouchableOpacity onPress={() => handleDelete(acc.id, acc.label)} hitSlop={8}>
+            <Trash2 size={17} color={colors.danger} />
+          </TouchableOpacity>
+        </View>
+      ))}
+      <View style={styles.accountAddRow}>
+        <TextInput
+          style={[styles.input, styles.accountInput]}
+          placeholder="Ex : Compte commun Fortuneo"
+          value={newLabel}
+          onChangeText={setNewLabel}
+        />
+        <Button title="Ajouter" onPress={() => void handleAdd()} disabled={adding || newLabel.trim() === ''} compact />
+      </View>
+    </View>
+  );
+}
+
 export default function SettingsScreen() {
   const profile = useStore((s) => s.profile);
   const partner = useStore((s) => s.partner);
@@ -115,7 +177,7 @@ export default function SettingsScreen() {
   const updatePartnerDisplayName = useStore((s) => s.updatePartnerDisplayName);
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <SectionLabel text="Prénoms" />
       <NameField
         label="Mon prénom"
@@ -130,9 +192,12 @@ export default function SettingsScreen() {
         onSave={updatePartnerDisplayName}
       />
 
+      <SectionLabel text="Comptes" />
+      <AccountsSection />
+
       <SectionLabel text="Application" />
       <UpdateSection />
-    </View>
+    </ScrollView>
   );
 }
 
@@ -141,7 +206,8 @@ function SectionLabel({ text }: { text: string }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg, padding: 16, gap: 14 },
+  container: { flex: 1, backgroundColor: colors.bg },
+  content: { padding: 16, gap: 14, paddingBottom: 48 },
   sectionLabel: {
     fontFamily: fonts.karlaBold,
     fontSize: 11,
@@ -158,6 +224,17 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   updateStatus: { fontFamily: fonts.karlaMedium, fontSize: 13, color: ink(0.55) },
+  accountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle,
+  },
+  accountLabel: { fontFamily: fonts.karlaMedium, fontSize: 14, color: colors.ink, flex: 1, marginRight: 8 },
+  accountAddRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  accountInput: { flex: 1 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   label: { fontFamily: fonts.karlaBold, fontSize: 13, color: ink(0.65) },
