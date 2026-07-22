@@ -14,3 +14,8 @@ export function formatPct(amount: number, ofTotal: number): string | null {
   if (ofTotal <= 0.01) return null;
   return `${((amount / ofTotal) * 100).toFixed(2)}%`;
 }
+
+/** Ex: "juillet 2026" à partir d'un period 'YYYY-MM-01'. */
+export function formatPeriodLabel(period: string): string {
+  return new Date(period).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+}
