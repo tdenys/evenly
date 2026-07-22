@@ -68,7 +68,6 @@ export default function PaydayScreen({ navigation }: Props) {
   const refresh = useStore((s) => s.refresh);
   const [loading, setLoading] = useState(true);
   const [viewedOwnerId, setViewedOwnerId] = useState<string | null>(null);
-  const [salaryText, setSalaryText] = useState('0');
   // Ajustements ponctuels pour ce dispatch uniquement (jamais persistés) — voir CLAUDE.md :
   // les montants sont modifiables à la main sans changer la règle permanente. N'existe pas pour
   // les actions liées à une enveloppe (montant en lecture seule, dérivé de Waterfall).
@@ -170,23 +169,14 @@ export default function PaydayScreen({ navigation }: Props) {
     await sendTestNotification();
   };
 
-  // Pré-remplit le salaire avec le revenu net déclaré de la personne affichée — mais seulement
-  // si la valeur numérique diverge (ne pas écraser une saisie ponctuelle en cours), même
-  // principe que IncomeField dans IncomeFormScreen.tsx. Change de personne : repart d'une ardoise
-  // vierge (les ajustements ponctuels d'un dispatch n'ont pas de sens pour l'autre personne).
-  useEffect(() => {
-    const numeric = Number(salaryText.replace(',', '.')) || 0;
-    if (numeric !== viewedNetIncome) {
-      setSalaryText(String(viewedNetIncome));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveOwnerId, viewedNetIncome]);
-
   useEffect(() => {
     setOverrides({});
   }, [effectiveOwnerId]);
 
-  const salary = Number(salaryText.replace(',', '.')) || 0;
+  // Le salaire utilisé pour la répartition est toujours le revenu net déclaré dans Budget — pas
+  // de champ de saisie ponctuel ici, pour éviter la confusion entre les deux (voir historique :
+  // ça semait le doute sur laquelle des deux valeurs faisait foi).
+  const salary = viewedNetIncome;
 
   const income = profile && partner ? coupleIncome(profile, partner) : { a: 0, b: 0 };
   const waterfallResult = useMemo(() => runWaterfall({ income, envelopes }), [income, envelopes]);
@@ -341,9 +331,6 @@ export default function PaydayScreen({ navigation }: Props) {
         </SectionCard>
       )}
 
-      <Text style={styles.label}>Montant du salaire</Text>
-      <TextInput style={styles.salaryInput} keyboardType="decimal-pad" value={salaryText} onChangeText={setSalaryText} />
-
       {summary && (
         <View style={styles.summaryRow}>
           {summary.isOverflow && <TriangleAlert size={13} color={colors.danger} />}
@@ -422,17 +409,6 @@ const styles = StyleSheet.create({
   fieldLabel: { fontFamily: fonts.karlaSemiBold, fontSize: 12.5, color: ink(0.6) },
   stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   bellButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  label: { fontFamily: fonts.karlaSemiBold, fontSize: 12.5, color: ink(0.6) },
-  salaryInput: {
-    borderWidth: 1.5,
-    borderColor: colors.borderInput,
-    borderRadius: 12,
-    backgroundColor: colors.surface,
-    padding: 12,
-    fontFamily: fonts.spectralSemiBold,
-    fontSize: 20,
-    color: colors.ink,
-  },
   summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   remaining: { fontFamily: fonts.karlaSemiBold, fontSize: 12.5, color: colors.warning },
   overflow: { fontFamily: fonts.karlaBold, fontSize: 12.5, color: colors.danger },
