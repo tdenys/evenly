@@ -170,6 +170,28 @@ function AccountsSection() {
   );
 }
 
+function SignOutSection() {
+  const signOut = useStore((s) => s.signOut);
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleSignOut = () => {
+    confirmAction('Se déconnecter', 'Tu devras te reconnecter pour accéder à nouveau à l\'app.', async () => {
+      setSigningOut(true);
+      try {
+        // Le changement de session déclenche onAuthStateChange (voir useStore.ts::init), qui
+        // repasse status à 'signedOut' — RootNavigator affiche alors l'écran de connexion tout
+        // seul, pas besoin d'un navigation.navigate ici.
+        await signOut();
+      } catch (err) {
+        notify('Erreur', errorMessage(err));
+        setSigningOut(false);
+      }
+    });
+  };
+
+  return <Button title="Se déconnecter" onPress={handleSignOut} disabled={signingOut} variant="text-danger" />;
+}
+
 export default function SettingsScreen() {
   const profile = useStore((s) => s.profile);
   const partner = useStore((s) => s.partner);
@@ -197,6 +219,9 @@ export default function SettingsScreen() {
 
       <SectionLabel text="Application" />
       <UpdateSection />
+
+      <SectionLabel text="Session" />
+      <SignOutSection />
     </ScrollView>
   );
 }
