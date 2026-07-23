@@ -1,4 +1,4 @@
-import type { Envelope, EnvelopeResult } from './types';
+import type { Amount, Envelope, EnvelopeResult } from './types';
 import { round2 } from './engine';
 
 export function findEnvelope(envelopes: Envelope[], id: string): Envelope | undefined {
@@ -27,6 +27,17 @@ export function findFundedEnvelopes(envelopes: Envelope[]): Envelope[] {
     ...(envelope.fundedBy !== null ? [envelope] : []),
     ...findFundedEnvelopes(envelope.children),
   ]);
+}
+
+/** Reconstruit l'arbre en remplaçant l'allocation de chaque enveloppe présente dans `overrides`
+ * (par id) — sert au mode simulation ("et si"), qui rejoue runWaterfall sur une copie modifiée
+ * de l'arbre réel sans jamais toucher aux enveloppes en base. */
+export function applyAllocationOverrides(envelopes: Envelope[], overrides: Record<string, Amount>): Envelope[] {
+  return envelopes.map((envelope) => ({
+    ...envelope,
+    allocation: overrides[envelope.id] ?? envelope.allocation,
+    children: applyAllocationOverrides(envelope.children, overrides),
+  }));
 }
 
 /** Renvoie le tableau (racine ou enfants d'un parent) qui contient directement cet id. */

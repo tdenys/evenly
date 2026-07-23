@@ -40,7 +40,7 @@ export interface PersonLabels {
 // valeurs € (ligne du haut) / % (badge pct, toujours affiché — voir plus bas) affichées côte à
 // côte pour ces 2 types) : le répéter dans la description gaspillerait de la largeur pour une
 // info déjà visible ailleurs sur la ligne.
-function describeAllocation(amount: Amount, personLabels: PersonLabels): string {
+export function describeAllocation(amount: Amount, personLabels: PersonLabels): string {
   switch (amount.type) {
     case 'fixed':
       return 'Montant fixe';
