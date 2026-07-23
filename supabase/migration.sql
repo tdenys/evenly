@@ -467,3 +467,12 @@ alter table envelopes add column goal_current numeric(10,2) check (goal_current 
 -- l'inverse) ne doit jamais être un état représentable, même côté DB.
 alter table envelopes add constraint envelopes_goal_consistency
   check ((goal_target is null) = (goal_current is null));
+
+-- ============================================================
+-- V2 — Lier un abonnement à une enveloppe de destination
+-- ============================================================
+
+-- Nullable + on delete set null : comme payday_actions.account_id, pas comme
+-- envelopes.parent_id (cascade) — supprimer une enveloppe ne doit jamais supprimer les
+-- abonnements qui pointaient dessus, ils repassent juste à "Aucune".
+alter table subscriptions add column envelope_id uuid references envelopes(id) on delete set null;

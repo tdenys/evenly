@@ -29,6 +29,23 @@ export function findFundedEnvelopes(envelopes: Envelope[]): Envelope[] {
   ]);
 }
 
+export interface FlatEnvelope {
+  id: string;
+  label: string;
+  emoji: string;
+  depth: number;
+}
+
+/** Liste plate de toutes les enveloppes de l'arbre (racine + sous-enveloppes) avec leur
+ * profondeur — sert aux sélecteurs qui doivent proposer n'importe quelle enveloppe, pas
+ * seulement un niveau (ex: lier un abonnement à une enveloppe). */
+export function flattenEnvelopes(envelopes: Envelope[], depth = 0): FlatEnvelope[] {
+  return envelopes.flatMap((envelope) => [
+    { id: envelope.id, label: envelope.label, emoji: envelope.emoji, depth },
+    ...flattenEnvelopes(envelope.children, depth + 1),
+  ]);
+}
+
 /** Reconstruit l'arbre en remplaçant l'allocation de chaque enveloppe présente dans `overrides`
  * (par id) — sert au mode simulation ("et si"), qui rejoue runWaterfall sur une copie modifiée
  * de l'arbre réel sans jamais toucher aux enveloppes en base. */
