@@ -16,6 +16,11 @@ import { currentPeriod } from '@/lib/format';
 // src/core/payday/engine.ts, qui ne lit que id/priority/amount).
 export type PaydayActionRow = PaydayAction & { ownerId: string; accountId: string | null };
 
+// envelopeId est une FK vers une autre table (envelopes) — même principe que accountId sur
+// PaydayActionRow : bolted-on ici, jamais dans le type pur Subscription (src/core/subscriptions
+// n'a aucun usage de savoir à quelle enveloppe un abonnement est lié).
+export type SubscriptionRow = Subscription & { envelopeId: string | null };
+
 export interface Profile {
   id: string;
   displayName: string;
@@ -38,7 +43,7 @@ interface StoreState {
   couple: Couple | null;
   envelopes: Envelope[];
   paydayActions: PaydayActionRow[];
-  subscriptions: Subscription[];
+  subscriptions: SubscriptionRow[];
   accounts: Account[];
   history: BudgetSnapshot[];
   paydayChecks: PaydayCheck[];
@@ -113,6 +118,7 @@ interface StoreState {
     frequency: SubscriptionFrequency;
     category: string;
     assignedTo: 'A' | 'B' | 'both';
+    envelopeId: string | null;
   }) => Promise<void>;
   updateSubscription: (
     id: string,
@@ -122,6 +128,7 @@ interface StoreState {
       frequency: SubscriptionFrequency;
       category: string;
       assignedTo: 'A' | 'B' | 'both';
+      envelopeId: string | null;
     }
   ) => Promise<void>;
   deleteSubscription: (id: string) => Promise<void>;
@@ -398,6 +405,10 @@ export const useStore = create<StoreState>((set, get) => ({
 
     await get().loadEnvelopes();
     if (linked.length > 0) await get().loadPaydayActions();
+    // subscriptions.envelope_id est "on delete set null" côté DB (voir supabase/migration.sql) —
+    // recharge le cache local pour ne pas garder une référence périmée à l'enveloppe supprimée,
+    // même précédent que deleteAccount qui recharge paydayActions après un cascade set null.
+    await get().loadSubscriptions();
   },
 
   setEnvelopeEnabled: async (id, enabled) => {
@@ -543,18 +554,19 @@ export const useStore = create<StoreState>((set, get) => ({
 
     const { data, error } = await supabase
       .from('subscriptions')
-      .select('id, title, cost, frequency, category, assigned_to')
+      .select('id, title, cost, frequency, category, assigned_to, envelope_id')
       .eq('couple_id', couple.id)
       .order('title', { ascending: true });
     if (error) throw error;
 
-    const subscriptions: Subscription[] = (data ?? []).map((row) => ({
+    const subscriptions: SubscriptionRow[] = (data ?? []).map((row) => ({
       id: row.id,
       title: row.title,
       cost: Number(row.cost),
       frequency: row.frequency as SubscriptionFrequency,
       category: row.category,
       assignedTo: row.assigned_to as 'A' | 'B' | 'both',
+      envelopeId: row.envelope_id,
     }));
 
     set({ subscriptions });
@@ -571,6 +583,7 @@ export const useStore = create<StoreState>((set, get) => ({
       frequency: input.frequency,
       category: input.category,
       assigned_to: input.assignedTo,
+      envelope_id: input.envelopeId,
     });
     if (error) throw error;
 
@@ -586,6 +599,7 @@ export const useStore = create<StoreState>((set, get) => ({
         frequency: input.frequency,
         category: input.category,
         assigned_to: input.assignedTo,
+        envelope_id: input.envelopeId,
       })
       .eq('id', id);
     if (error) throw error;

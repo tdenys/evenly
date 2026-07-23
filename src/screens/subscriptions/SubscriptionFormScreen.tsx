@@ -1,10 +1,11 @@
-import { useLayoutEffect, useState } from 'react';
+import { useLayoutEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@/navigation/RootNavigator';
 import { useStore } from '@/store/useStore';
 import type { SubscriptionFrequency } from '@/core/subscriptions/types';
 import { monthlyCost } from '@/core/subscriptions/monthlyCost';
+import { flattenEnvelopes } from '@/core/waterfall/tree';
 import { confirmAction, errorMessage, notify } from '@/lib/alert';
 import { coupleLabels } from '@/lib/couple';
 import { formatAmount } from '@/lib/format';
@@ -29,11 +30,13 @@ export default function SubscriptionFormScreen({ route, navigation }: Props) {
   const profile = useStore((s) => s.profile);
   const partner = useStore((s) => s.partner);
   const subscriptions = useStore((s) => s.subscriptions);
+  const envelopes = useStore((s) => s.envelopes);
   const createSubscription = useStore((s) => s.createSubscription);
   const updateSubscription = useStore((s) => s.updateSubscription);
   const deleteSubscription = useStore((s) => s.deleteSubscription);
 
   const personLabels = coupleLabels(profile, partner);
+  const flatEnvelopes = useMemo(() => flattenEnvelopes(envelopes), [envelopes]);
 
   const { subscriptionId } = route.params;
   const existing = subscriptionId ? subscriptions.find((s) => s.id === subscriptionId) : undefined;
@@ -43,6 +46,7 @@ export default function SubscriptionFormScreen({ route, navigation }: Props) {
   const [frequency, setFrequency] = useState<SubscriptionFrequency>(existing?.frequency ?? 'monthly');
   const [category, setCategory] = useState(existing?.category ?? '');
   const [assignedTo, setAssignedTo] = useState<'A' | 'B' | 'both'>(existing?.assignedTo ?? 'both');
+  const [envelopeId, setEnvelopeId] = useState<string | null>(existing?.envelopeId ?? null);
   const [saving, setSaving] = useState(false);
 
   const cost = Number(costText.replace(',', '.')) || 0;
@@ -60,7 +64,14 @@ export default function SubscriptionFormScreen({ route, navigation }: Props) {
 
     setSaving(true);
     try {
-      const input = { title: title.trim(), cost: parsedCost, frequency, category: category.trim(), assignedTo };
+      const input = {
+        title: title.trim(),
+        cost: parsedCost,
+        frequency,
+        category: category.trim(),
+        assignedTo,
+        envelopeId,
+      };
       if (existing) {
         await updateSubscription(existing.id, input);
       } else {
@@ -102,7 +113,7 @@ export default function SubscriptionFormScreen({ route, navigation }: Props) {
         </TouchableOpacity>
       ),
     });
-  }, [navigation, existing, saving, title, costText, frequency, category, assignedTo]);
+  }, [navigation, existing, saving, title, costText, frequency, category, assignedTo, envelopeId]);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -146,6 +157,20 @@ export default function SubscriptionFormScreen({ route, navigation }: Props) {
               selected={assignedTo === value}
               onPress={() => setAssignedTo(value)}
               gradient={value === 'both'}
+            />
+          ))}
+        </ChipRow>
+      </SectionCard>
+
+      <SectionCard label="Enveloppe liée">
+        <ChipRow>
+          <Chip label="Aucune" selected={envelopeId === null} onPress={() => setEnvelopeId(null)} />
+          {flatEnvelopes.map((e) => (
+            <Chip
+              key={e.id}
+              label={`${e.depth > 0 ? '↳ ' : ''}${e.emoji} ${e.label}`}
+              selected={envelopeId === e.id}
+              onPress={() => setEnvelopeId(e.id)}
             />
           ))}
         </ChipRow>

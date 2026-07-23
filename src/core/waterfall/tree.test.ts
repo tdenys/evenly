@@ -1,4 +1,4 @@
-import { applyAllocationOverrides, summarizeChildren, type ChildrenSummary } from './tree';
+import { applyAllocationOverrides, flattenEnvelopes, summarizeChildren, type ChildrenSummary } from './tree';
 import type { Envelope, EnvelopeResult } from './types';
 
 function child(amount: number, requestedAmount: number): EnvelopeResult {
@@ -63,5 +63,56 @@ describe('applyAllocationOverrides', () => {
   it("renvoie l'arbre inchangé (structurellement) si overrides est vide", () => {
     const result = applyAllocationOverrides(envelopes, {});
     expect(result).toEqual(envelopes);
+  });
+});
+
+describe('flattenEnvelopes', () => {
+  const envelopes: Envelope[] = [
+    {
+      id: 'besoins',
+      label: 'Besoins',
+      emoji: '🏠',
+      priority: 1,
+      allocation: { type: 'percent_envelope', pct: 50 },
+      enabled: true,
+      fundedBy: null,
+      goal: null,
+      children: [
+        {
+          id: 'loyer',
+          label: 'Loyer',
+          emoji: '🔑',
+          priority: 1,
+          allocation: { type: 'fixed', value: 800 },
+          enabled: true,
+          fundedBy: null,
+          goal: null,
+          children: [],
+        },
+      ],
+    },
+    {
+      id: 'envies',
+      label: 'Envies',
+      emoji: '🎉',
+      priority: 2,
+      allocation: { type: 'percent_envelope', pct: 30 },
+      enabled: true,
+      fundedBy: null,
+      goal: null,
+      children: [],
+    },
+  ];
+
+  it('aplati racine + sous-enveloppes avec leur profondeur, dans l\'ordre de parcours', () => {
+    expect(flattenEnvelopes(envelopes)).toEqual([
+      { id: 'besoins', label: 'Besoins', emoji: '🏠', depth: 0 },
+      { id: 'loyer', label: 'Loyer', emoji: '🔑', depth: 1 },
+      { id: 'envies', label: 'Envies', emoji: '🎉', depth: 0 },
+    ]);
+  });
+
+  it('renvoie un tableau vide pour un arbre vide', () => {
+    expect(flattenEnvelopes([])).toEqual([]);
   });
 });
