@@ -45,6 +45,7 @@ describe('resolveOwnerActions', () => {
       allocation: { type: 'percent_envelope', pct: 50 },
       enabled: true,
       fundedBy: 'both',
+      goal: null,
       children: [],
     },
   ];
