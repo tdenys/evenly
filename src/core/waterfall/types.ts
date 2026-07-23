@@ -31,6 +31,14 @@ export interface Rule {
   condition?: Condition;
 }
 
+// Montant cible + solde courant saisi à la main (pas de connexion bancaire) — objet imbriqué
+// nullable plutôt que 2 champs plats indépendamment nullables : "cible sans solde" (ou
+// l'inverse) doit rester irreprésentable au niveau du type, pas seulement vérifié à l'usage.
+export interface EnvelopeGoal {
+  target: number;
+  current: number;
+}
+
 export interface Envelope {
   id: string;
   label: string;
@@ -45,6 +53,9 @@ export interface Envelope {
   // être financée par B, l'app ne force pas la cohérence entre les deux). `null` = pas liée au
   // payday (la plupart des enveloppes, notamment les subdivisions internes).
   fundedBy: 'A' | 'B' | 'both' | null;
+  // `null` = pas d'objectif. Une fois `current >= target`, l'enveloppe est automatiquement
+  // skip par le moteur (voir isGoalReached dans engine.ts) — même mécanisme que `enabled: false`.
+  goal: EnvelopeGoal | null;
   children: Envelope[]; // sous-enveloppes, même forme, récursif
 }
 

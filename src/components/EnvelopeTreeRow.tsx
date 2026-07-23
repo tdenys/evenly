@@ -19,10 +19,12 @@ import {
   Pencil,
   Percent,
   Power,
+  Target,
   Trash2,
   TriangleAlert,
 } from 'lucide-react-native';
 import type { Amount, Envelope, EnvelopeResult } from '@/core/waterfall/types';
+import { isGoalReached } from '@/core/waterfall/engine';
 import { summarizeChildren } from '@/core/waterfall/tree';
 import { formatAmount, formatAmountWithPct, formatPct } from '@/lib/format';
 import { confirmAction, notify } from '@/lib/alert';
@@ -94,6 +96,9 @@ interface ListProps {
   /** Sauvegarde rapide de l'allocation depuis la pop-up €/% (menu ⋯ → "Modifier le montant") —
    * distinct de onEdit qui ouvre le formulaire complet. */
   onUpdateAllocation: (envelopeId: string, allocation: Amount) => void;
+  /** Sauvegarde rapide du solde d'objectif depuis la pop-up dédiée (menu ⋯ → "Mettre à jour le
+   * solde") — ne touche jamais le montant cible, uniquement le solde courant. */
+  onUpdateGoalBalance: (envelopeId: string, current: number) => void;
   /** Suppression directe depuis le menu ⋯ de la ligne (avec confirmation) — distinct de la
    * suppression au fond du formulaire complet. */
   onDelete: (envelopeId: string) => void;
@@ -149,6 +154,7 @@ export function SiblingEnvelopeList({
   onEdit,
   onToggleEnabled,
   onUpdateAllocation,
+  onUpdateGoalBalance,
   onDelete,
   onDragStateChange,
   reorderMode,
@@ -204,6 +210,7 @@ export function SiblingEnvelopeList({
             onEdit={onEdit}
             onToggleEnabled={onToggleEnabled}
             onUpdateAllocation={onUpdateAllocation}
+            onUpdateGoalBalance={onUpdateGoalBalance}
             onDelete={onDelete}
             onDragStateChange={onDragStateChange}
             onLayoutHeight={(height) => heightsRef.current.set(envelope.id, height)}
@@ -229,6 +236,7 @@ interface ContainerProps {
   onEdit: (envelopeId: string) => void;
   onToggleEnabled: (id: string, enabled: boolean) => void;
   onUpdateAllocation: (envelopeId: string, allocation: Amount) => void;
+  onUpdateGoalBalance: (envelopeId: string, current: number) => void;
   onDelete: (envelopeId: string) => void;
   onDragStateChange?: (dragging: boolean) => void;
   onLayoutHeight: (height: number) => void;
@@ -249,6 +257,7 @@ function EnvelopeTreeRowContainer({
   onEdit,
   onToggleEnabled,
   onUpdateAllocation,
+  onUpdateGoalBalance,
   onDelete,
   onDragStateChange,
   onLayoutHeight,
@@ -257,10 +266,12 @@ function EnvelopeTreeRowContainer({
 }: ContainerProps) {
   const [expanded, setExpanded] = useState(false);
   const [editingAmount, setEditingAmount] = useState(false);
+  const [editingGoalBalance, setEditingGoalBalance] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [eurText, setEurText] = useState('');
   const [pctText, setPctText] = useState('');
   const [lastEdited, setLastEdited] = useState<'eur' | 'pct'>('eur');
+  const [goalBalanceText, setGoalBalanceText] = useState('');
   // `autoFocus` (et même `onShow` de la Modal, pas fiable sur Android) ne suffit pas toujours à
   // déclencher le clavier dans une Modal — la fenêtre native du Modal doit avoir fini de
   // s'attacher avant qu'un focus() ait un effet réel. Un court délai après le montage force le
@@ -271,6 +282,12 @@ function EnvelopeTreeRowContainer({
     const timeout = setTimeout(() => eurInputRef.current?.focus(), 200);
     return () => clearTimeout(timeout);
   }, [editingAmount]);
+  const goalBalanceInputRef = useRef<TextInput>(null);
+  useEffect(() => {
+    if (!editingGoalBalance) return;
+    const timeout = setTimeout(() => goalBalanceInputRef.current?.focus(), 200);
+    return () => clearTimeout(timeout);
+  }, [editingGoalBalance]);
 
   const result = getResult(envelope.id);
   const amount = result?.amount ?? 0;
@@ -283,6 +300,9 @@ function EnvelopeTreeRowContainer({
   const canExpand = depth === 0;
   const summary = expanded ? describeChildrenSummary(amount, result?.children ?? []) : null;
   const canEditAmount = editableAmount(envelope.allocation) && !reorderMode;
+  const goal = envelope.goal;
+  const goalReached = isGoalReached(envelope);
+  const goalPct = goal ? formatPct(goal.current, goal.target) : null;
 
   const openAmountEditor = () => {
     const pctValue = parentAmount > 0 ? (amount / parentAmount) * 100 : 0;
@@ -329,6 +349,24 @@ function EnvelopeTreeRowContainer({
     setEditingAmount(false);
   };
 
+  const openGoalBalanceEditor = () => {
+    if (!goal) return;
+    setGoalBalanceText(goal.current.toFixed(2));
+    setEditingGoalBalance(true);
+  };
+
+  const closeGoalBalanceEditor = () => setEditingGoalBalance(false);
+
+  const handleSaveGoalBalance = () => {
+    const n = Number(goalBalanceText.replace(',', '.'));
+    if (Number.isNaN(n) || n < 0) {
+      notify('Solde invalide', 'Renseigne un solde en € valide.');
+      return;
+    }
+    onUpdateGoalBalance(envelope.id, n);
+    setEditingGoalBalance(false);
+  };
+
   const closeMenu = () => setMenuOpen(false);
 
   const handleToggleFromMenu = () => {
@@ -339,6 +377,11 @@ function EnvelopeTreeRowContainer({
   const handleEditAmountFromMenu = () => {
     closeMenu();
     openAmountEditor();
+  };
+
+  const handleUpdateGoalBalanceFromMenu = () => {
+    closeMenu();
+    openGoalBalanceEditor();
   };
 
   const handleEditFromMenu = () => {
@@ -386,10 +429,29 @@ function EnvelopeTreeRowContainer({
               <View style={styles.descriptionRow}>
                 <Text style={styles.description} numberOfLines={1}>
                   {describeAllocation(envelope.allocation, personLabels)}
-                  {!envelope.enabled && ' · Désactivée'}
+                  {!envelope.enabled
+                    ? ' · Désactivée'
+                    : goalReached && ' · Objectif atteint'}
                 </Text>
                 {pct && <Text style={styles.pct}>{pct}</Text>}
               </View>
+
+              {goal && (
+                <View style={styles.goalRow}>
+                  <View style={styles.goalBarTrack}>
+                    <View
+                      style={[
+                        styles.goalBarFill,
+                        { width: `${Math.min((goal.current / goal.target) * 100, 100)}%` },
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.goalText}>
+                    {formatAmount(goal.current)} / {formatAmount(goal.target)} · {goalPct ?? '0%'}
+                    {goalReached ? ' ✓' : ''}
+                  </Text>
+                </View>
+              )}
             </View>
 
             {!reorderMode && (
@@ -459,6 +521,39 @@ function EnvelopeTreeRowContainer({
         </Modal>
       )}
 
+      {goal && (
+        <Modal visible={editingGoalBalance} transparent animationType="fade" onRequestClose={closeGoalBalanceEditor}>
+          <KeyboardAvoidingView style={styles.modalRoot} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+            <View style={styles.modalBackdrop}>
+              <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeGoalBalanceEditor} />
+              <View style={styles.modalCard}>
+                <Text style={styles.modalTitle} numberOfLines={1}>
+                  {envelope.emoji} {envelope.label}
+                </Text>
+                <View style={styles.amountEditorField}>
+                  <Text style={styles.amountEditorUnit}>€</Text>
+                  <TextInput
+                    ref={goalBalanceInputRef}
+                    style={styles.amountEditorInput}
+                    keyboardType="decimal-pad"
+                    value={goalBalanceText}
+                    onChangeText={setGoalBalanceText}
+                  />
+                </View>
+                <View style={styles.amountEditorActions}>
+                  <TouchableOpacity onPress={closeGoalBalanceEditor} hitSlop={6}>
+                    <Text style={styles.amountEditorCancel}>Annuler</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleSaveGoalBalance} hitSlop={6}>
+                    <Text style={styles.amountEditorSave}>Enregistrer</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
+      )}
+
       <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={closeMenu}>
         <View style={styles.modalBackdrop}>
           <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeMenu} />
@@ -474,6 +569,12 @@ function EnvelopeTreeRowContainer({
               <TouchableOpacity style={styles.menuOption} onPress={handleEditAmountFromMenu}>
                 <Percent size={17} color={ink(0.6)} />
                 <Text style={styles.menuOptionText}>Modifier le montant</Text>
+              </TouchableOpacity>
+            )}
+            {goal && (
+              <TouchableOpacity style={styles.menuOption} onPress={handleUpdateGoalBalanceFromMenu}>
+                <Target size={17} color={ink(0.6)} />
+                <Text style={styles.menuOptionText}>Mettre à jour le solde</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity style={styles.menuOption} onPress={handleEditFromMenu}>
@@ -501,6 +602,7 @@ function EnvelopeTreeRowContainer({
             onEdit={onEdit}
             onToggleEnabled={onToggleEnabled}
             onUpdateAllocation={onUpdateAllocation}
+            onUpdateGoalBalance={onUpdateGoalBalance}
             onDelete={onDelete}
             onDragStateChange={onDragStateChange}
             reorderMode={reorderMode}
@@ -570,6 +672,12 @@ const styles = StyleSheet.create({
   },
   description: { fontFamily: fonts.karlaMedium, fontSize: 11.5, color: ink(0.5), flexShrink: 1 },
   pct: { fontFamily: fonts.karlaMedium, fontSize: 11.5, color: ink(0.5), marginLeft: 8 },
+  // Même marginLeft que descriptionRow (aligné sous le libellé, pas sous le chevron) — barre
+  // fine + texte compact, une seule ligne ajoutée par enveloppe avec objectif.
+  goalRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 22, marginTop: 4 },
+  goalBarTrack: { flex: 1, height: 5, borderRadius: 3, backgroundColor: colors.borderSubtle, overflow: 'hidden' },
+  goalBarFill: { height: '100%', borderRadius: 3, backgroundColor: colors.primary },
+  goalText: { fontFamily: fonts.karlaMedium, fontSize: 11, color: ink(0.5) },
   menuZone: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   // Pop-up centrée plutôt qu'éditeur inline : garde une taille de champ confortable quel que
   // soit le niveau d'imbrication (depth) de la ligne, et gère nativement le clavier (pas besoin

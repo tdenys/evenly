@@ -10,6 +10,7 @@ function env(overrides: Partial<Envelope> & Pick<Envelope, 'id' | 'allocation'>)
     priority: 1,
     enabled: true,
     fundedBy: null,
+    goal: null,
     children: [],
     ...overrides,
   };
@@ -188,6 +189,73 @@ describe('runWaterfall — enveloppe désactivée', () => {
       ['inactive', 0],
       ['pea-b', 400],
     ]);
+  });
+});
+
+describe('runWaterfall — objectif atteint', () => {
+  it('un objectif atteint vaut 0€ et ne consomme rien — la sœur suivante récupère tout', () => {
+    const investissement = env({
+      id: 'investissement',
+      label: 'Investissement',
+      allocation: { type: 'fixed', value: 1000 },
+      children: [
+        env({
+          id: 'matelas',
+          label: 'Matelas sécurité (objectif atteint)',
+          priority: 1,
+          allocation: { type: 'fixed', value: 300 },
+          goal: { target: 3000, current: 3000 },
+        }),
+        env({ id: 'reste', label: 'Reste', priority: 2, allocation: { type: 'percent_remaining', pct: 100 } }),
+      ],
+    });
+
+    const result = runWaterfall({ income: { a: 1000, b: 0 }, envelopes: [investissement] });
+
+    expect(result.envelopeResults[0].children.map((c) => [c.envelopeId, c.amount])).toEqual([
+      ['matelas', 0],
+      ['reste', 1000], // pas 700 : le matelas à l'objectif atteint ne consomme rien du tout
+    ]);
+    expect(result.envelopeResults[0].children[0].requestedAmount).toBe(0);
+  });
+
+  it('un objectif atteint entre deux prorata_income ne casse pas leur groupe', () => {
+    const envelope = env({
+      id: 'env',
+      allocation: { type: 'fixed', value: 1000 },
+      children: [
+        env({ id: 'pea-a', label: 'PEA de A', priority: 1, allocation: { type: 'prorata_income', who: 'A' } }),
+        env({
+          id: 'atteint',
+          label: 'Objectif atteint',
+          priority: 2,
+          allocation: { type: 'fixed', value: 9999 },
+          goal: { target: 500, current: 500 },
+        }),
+        env({ id: 'pea-b', label: 'PEA de B', priority: 3, allocation: { type: 'prorata_income', who: 'B' } }),
+      ],
+    });
+
+    const result = runWaterfall({ income: { a: 600, b: 400 }, envelopes: [envelope] });
+
+    expect(result.envelopeResults[0].children.map((c) => [c.envelopeId, c.amount])).toEqual([
+      ['pea-a', 600],
+      ['atteint', 0],
+      ['pea-b', 400],
+    ]);
+  });
+
+  it('un objectif pas encore atteint se résout normalement, comme sans objectif', () => {
+    const envelope = env({
+      id: 'matelas',
+      label: 'Matelas sécurité',
+      allocation: { type: 'fixed', value: 300 },
+      goal: { target: 3000, current: 2500 },
+    });
+
+    const result = runWaterfall({ income: { a: 1000, b: 0 }, envelopes: [envelope] });
+
+    expect(result.envelopeResults[0].amount).toBe(300);
   });
 });
 
