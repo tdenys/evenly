@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
-import type { Amount, Envelope } from '@/core/waterfall/types';
+import type { Amount, Envelope, EnvelopeGoal } from '@/core/waterfall/types';
 import { findSiblings } from '@/core/waterfall/tree';
 import { runWaterfall } from '@/core/waterfall/engine';
 import type { PaydayAction, PaydayAmount } from '@/core/payday/types';
@@ -63,6 +63,7 @@ interface StoreState {
     allocation: Amount;
     enabled: boolean;
     fundedBy: 'A' | 'B' | 'both' | null;
+    goal: EnvelopeGoal | null;
     parentId: string | null;
   }) => Promise<void>;
   updateEnvelope: (
@@ -74,11 +75,13 @@ interface StoreState {
       allocation: Amount;
       enabled: boolean;
       fundedBy: 'A' | 'B' | 'both' | null;
+      goal: EnvelopeGoal | null;
     }
   ) => Promise<void>;
   deleteEnvelope: (id: string) => Promise<void>;
   reorderEnvelopeTo: (id: string, targetIndex: number) => Promise<void>;
   setEnvelopeEnabled: (id: string, enabled: boolean) => Promise<void>;
+  updateEnvelopeGoalBalance: (id: string, current: number) => Promise<void>;
   loadPaydayActions: () => Promise<void>;
   createPaydayAction: (input: {
     ownerId: string;
@@ -300,7 +303,7 @@ export const useStore = create<StoreState>((set, get) => ({
 
     const { data, error } = await supabase
       .from('envelopes')
-      .select('id, parent_id, label, emoji, priority, allocation, enabled, funded_by')
+      .select('id, parent_id, label, emoji, priority, allocation, enabled, funded_by, goal_target, goal_current')
       .eq('couple_id', couple.id)
       .order('priority', { ascending: true });
     if (error) throw error;
@@ -321,6 +324,7 @@ export const useStore = create<StoreState>((set, get) => ({
         allocation: row.allocation as Amount,
         enabled: row.enabled,
         fundedBy: row.funded_by as 'A' | 'B' | 'both' | null,
+        goal: row.goal_target !== null ? { target: Number(row.goal_target), current: Number(row.goal_current) } : null,
         children: build(row.id),
       }));
 
@@ -342,6 +346,8 @@ export const useStore = create<StoreState>((set, get) => ({
         allocation: input.allocation,
         enabled: input.enabled,
         funded_by: input.fundedBy,
+        goal_target: input.goal?.target ?? null,
+        goal_current: input.goal?.current ?? null,
       })
       .select('id')
       .single();
@@ -361,6 +367,8 @@ export const useStore = create<StoreState>((set, get) => ({
         allocation: input.allocation,
         enabled: input.enabled,
         funded_by: input.fundedBy,
+        goal_target: input.goal?.target ?? null,
+        goal_current: input.goal?.current ?? null,
       })
       .eq('id', id);
     if (error) throw error;
@@ -388,6 +396,16 @@ export const useStore = create<StoreState>((set, get) => ({
 
   setEnvelopeEnabled: async (id, enabled) => {
     const { error } = await supabase.from('envelopes').update({ enabled }).eq('id', id);
+    if (error) throw error;
+
+    await get().loadEnvelopes();
+  },
+
+  // N'est appelé que quand l'enveloppe a déjà un objectif (goal !== null côté UI) — ne touche
+  // jamais goal_target, donc la contrainte de cohérence DB (les deux nulles ou renseignées
+  // ensemble) ne peut pas être violée par ce chemin.
+  updateEnvelopeGoalBalance: async (id, current) => {
+    const { error } = await supabase.from('envelopes').update({ goal_current: current }).eq('id', id);
     if (error) throw error;
 
     await get().loadEnvelopes();

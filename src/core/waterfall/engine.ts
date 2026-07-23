@@ -43,6 +43,10 @@ function byPriority<T extends { priority: number }>(items: T[]): T[] {
   return [...items].sort((x, y) => x.priority - y.priority);
 }
 
+export function isGoalReached(envelope: Envelope): boolean {
+  return envelope.goal !== null && envelope.goal.current >= envelope.goal.target;
+}
+
 // Des enveloppes sœurs consécutives (par priorité) de type `prorata_income` se partagent le
 // pool restant tel qu'il était AU DÉBUT du groupe, pas un reste qui diminue entre elles —
 // sinon la 2e personne recevrait moins que sa vraie part proportionnelle (ex: A=60%, B=40% du
@@ -53,11 +57,12 @@ function runSiblings(envelopes: Envelope[], poolAtStart: number, poolRemaining: 
 
   return byPriority(envelopes).map((envelope) => {
     let resolved: Resolved;
-    if (!envelope.enabled) {
-      // Désactivée manuellement (ex: "matelas de sécurité" déjà plein) : 0€, ne consomme rien
-      // du pool — donc profite automatiquement à la sœur suivante. Ne touche pas `prorataBase`
-      // : une enveloppe désactivée est transparente pour le regroupement des prorata_income
-      // consécutives (ex: [prorata A, désactivée, prorata B] partagent quand même le même reste).
+    if (!envelope.enabled || isGoalReached(envelope)) {
+      // Désactivée manuellement OU objectif atteint (ex: "matelas de sécurité" déjà plein) :
+      // 0€, ne consomme rien du pool — donc profite automatiquement à la sœur suivante. Ne
+      // touche pas `prorataBase` : ces deux cas restent transparents pour le regroupement des
+      // prorata_income consécutives (ex: [prorata A, désactivée/atteinte, prorata B] partagent
+      // quand même le même reste).
       resolved = { requested: 0, amount: 0 };
     } else if (envelope.allocation.type === 'prorata_income') {
       if (prorataBase === null) prorataBase = remaining;

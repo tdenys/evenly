@@ -429,3 +429,14 @@ create policy "delete couple budget_snapshots" on budget_snapshots
   for delete to authenticated using (couple_id = auth_couple_id());
 
 grant select, insert, update, delete on budget_snapshots to authenticated;
+
+-- ============================================================
+-- V2 — Objectifs d'enveloppe (montant cible + solde saisi à la main)
+-- ============================================================
+
+alter table envelopes add column goal_target numeric(10,2) check (goal_target is null or goal_target > 0);
+alter table envelopes add column goal_current numeric(10,2) check (goal_current is null or goal_current >= 0);
+-- Les deux colonnes sont nulles ensemble ou renseignées ensemble — "cible sans solde" (ou
+-- l'inverse) ne doit jamais être un état représentable, même côté DB.
+alter table envelopes add constraint envelopes_goal_consistency
+  check ((goal_target is null) = (goal_current is null));

@@ -63,6 +63,9 @@ export default function EnvelopeFormScreen({ route, navigation }: Props) {
   );
   const [enabled, setEnabled] = useState(existing?.enabled ?? true);
   const [fundedBy, setFundedBy] = useState<'A' | 'B' | 'both' | null>(existing?.fundedBy ?? null);
+  const [goalEnabled, setGoalEnabled] = useState(existing?.goal !== null && existing?.goal !== undefined);
+  const [goalTarget, setGoalTarget] = useState(existing?.goal ? String(existing.goal.target) : '');
+  const [goalCurrent, setGoalCurrent] = useState(existing?.goal ? String(existing.goal.current) : '');
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -70,9 +73,15 @@ export default function EnvelopeFormScreen({ route, navigation }: Props) {
       notify('Libellé manquant', 'Donne un nom à cette enveloppe.');
       return;
     }
+    const targetValue = Number(goalTarget.replace(',', '.'));
+    if (goalEnabled && (Number.isNaN(targetValue) || targetValue <= 0)) {
+      notify('Objectif invalide', 'Renseigne un montant cible supérieur à 0.');
+      return;
+    }
 
     setSaving(true);
     try {
+      const currentValue = Number(goalCurrent.replace(',', '.'));
       const input = {
         label: label.trim(),
         emoji: emoji.trim() || '💰',
@@ -80,6 +89,7 @@ export default function EnvelopeFormScreen({ route, navigation }: Props) {
         allocation,
         enabled,
         fundedBy,
+        goal: goalEnabled ? { target: targetValue, current: Number.isNaN(currentValue) ? 0 : currentValue } : null,
       };
       if (existing) {
         await updateEnvelope(existing.id, input);
@@ -129,7 +139,7 @@ export default function EnvelopeFormScreen({ route, navigation }: Props) {
         </TouchableOpacity>
       ),
     });
-  }, [navigation, existing, saving, label, emoji, priority, allocation, enabled, fundedBy]);
+  }, [navigation, existing, saving, label, emoji, priority, allocation, enabled, fundedBy, goalEnabled, goalTarget, goalCurrent]);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -163,6 +173,33 @@ export default function EnvelopeFormScreen({ route, navigation }: Props) {
           <Text style={styles.fillButtonText}>Combler avec le reste</Text>
         </TouchableOpacity>
         <AmountEditor value={allocation} onChange={setAllocation} personLabels={personLabels} />
+      </SectionCard>
+
+      <SectionCard label="Objectif">
+        <View style={styles.fieldRow}>
+          <Text style={styles.fieldLabel}>Objectif actif</Text>
+          <AppSwitch value={goalEnabled} onValueChange={setGoalEnabled} />
+        </View>
+        {goalEnabled && (
+          <>
+            <Text style={styles.fieldLabel}>Montant cible</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Ex : 3000"
+              value={goalTarget}
+              onChangeText={setGoalTarget}
+              keyboardType="decimal-pad"
+            />
+            <Text style={styles.fieldLabel}>Solde actuel</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Ex : 2460"
+              value={goalCurrent}
+              onChangeText={setGoalCurrent}
+              keyboardType="decimal-pad"
+            />
+          </>
+        )}
       </SectionCard>
 
       <SectionCard label="Financée par">

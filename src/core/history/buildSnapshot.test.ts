@@ -10,6 +10,7 @@ const envelopes: Envelope[] = [
     allocation: { type: 'percent_envelope', pct: 50 },
     enabled: true,
     fundedBy: null,
+    goal: null,
     children: [
       {
         id: 'loyer',
@@ -19,6 +20,7 @@ const envelopes: Envelope[] = [
         allocation: { type: 'fixed', value: 800 },
         enabled: true,
         fundedBy: null,
+    goal: null,
         children: [],
       },
     ],
@@ -31,6 +33,7 @@ const envelopes: Envelope[] = [
     allocation: { type: 'percent_envelope', pct: 30 },
     enabled: true,
     fundedBy: null,
+    goal: null,
     children: [],
   },
 ];
