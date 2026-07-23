@@ -5,11 +5,12 @@ import * as Notifications from 'expo-notifications';
 // plateforme (voir Platform.OS ci-dessous), l'écran appelant doit aussi masquer l'UI concernée.
 const PAYDAY_REMINDER_ID = 'payday-reminder';
 
-const content: Notifications.NotificationContentInput = {
-  title: 'Jour de versement',
-  body: "C'est le jour de versement — va voir ta répartition.",
-  data: { screen: 'Payday' },
-};
+// `body` est calculé par l'appelant (PaydayScreen, via describeReminderBody) à partir des
+// virements pas encore cochés — content n'est donc plus une constante partagée mais construit
+// par appel, pour refléter le body dynamique du moment.
+function buildContent(body: string): Notifications.NotificationContentInput {
+  return { title: 'Jour de versement', body, data: { screen: 'Payday' } };
+}
 
 export async function getNotificationPermissionGranted(): Promise<boolean> {
   if (Platform.OS === 'web') return false;
@@ -27,12 +28,12 @@ export async function requestNotificationPermission(): Promise<boolean> {
 
 /** Reprogramme le rappel mensuel — remplace toujours l'éventuel rappel précédent (identifiant
  * fixe), donc jamais de doublon même si appelé plusieurs fois. */
-export async function schedulePaydayReminder(day: number): Promise<void> {
+export async function schedulePaydayReminder(day: number, body: string): Promise<void> {
   if (Platform.OS === 'web') return;
   await Notifications.cancelScheduledNotificationAsync(PAYDAY_REMINDER_ID);
   await Notifications.scheduleNotificationAsync({
     identifier: PAYDAY_REMINDER_ID,
-    content,
+    content: buildContent(body),
     trigger: { type: Notifications.SchedulableTriggerInputTypes.MONTHLY, day, hour: 9, minute: 0 },
   });
 }
@@ -44,7 +45,7 @@ export async function cancelPaydayReminder(): Promise<void> {
 
 /** Déclenchement immédiat, pour le bouton "Tester la notification" — identifiant distinct du
  * rappel programmé pour ne pas l'écraser. */
-export async function sendTestNotification(): Promise<void> {
+export async function sendTestNotification(body: string): Promise<void> {
   if (Platform.OS === 'web') return;
-  await Notifications.scheduleNotificationAsync({ content, trigger: null });
+  await Notifications.scheduleNotificationAsync({ content: buildContent(body), trigger: null });
 }

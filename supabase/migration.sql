@@ -429,3 +429,30 @@ create policy "delete couple budget_snapshots" on budget_snapshots
   for delete to authenticated using (couple_id = auth_couple_id());
 
 grant select, insert, update, delete on budget_snapshots to authenticated;
+
+-- ============================================================
+-- V2 — Checklist de virement mensuelle (payday_checks)
+-- ============================================================
+
+create table payday_checks (
+  id uuid primary key default gen_random_uuid(),
+  couple_id uuid not null references couples(id),
+  action_id uuid not null references payday_actions(id) on delete cascade,
+  period date not null, -- 1er jour du mois, ex: '2026-07-01'
+  checked_at timestamptz not null default now(),
+  unique (action_id, period)
+);
+
+alter table payday_checks enable row level security;
+
+-- Pas de policy "update" : cocher/décocher est modélisé par la PRÉSENCE de la ligne (insert
+-- pour cocher, delete pour décocher) — aucun code n'émet jamais d'UPDATE sur cette table,
+-- contrairement à budget_snapshots dont l'upsert déclenche une UPDATE en interne.
+create policy "select couple payday_checks" on payday_checks
+  for select to authenticated using (couple_id = auth_couple_id());
+create policy "insert couple payday_checks" on payday_checks
+  for insert to authenticated with check (couple_id = auth_couple_id());
+create policy "delete couple payday_checks" on payday_checks
+  for delete to authenticated using (couple_id = auth_couple_id());
+
+grant select, insert, delete on payday_checks to authenticated;

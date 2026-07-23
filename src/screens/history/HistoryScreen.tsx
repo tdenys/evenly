@@ -4,16 +4,11 @@ import { ChevronDown, ChevronRight, Trash2 } from 'lucide-react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useStore } from '@/store/useStore';
 import { confirmAction, errorMessage, notify } from '@/lib/alert';
-import { formatAmount, formatPeriodLabel } from '@/lib/format';
+import { currentPeriod, formatAmount, formatPeriodLabel } from '@/lib/format';
 import { colors, ink } from '@/theme/colors';
 import { fonts } from '@/theme/typography';
 import Button from '@/components/ui/Button';
 import HistoryEnvelopeRow from '@/components/HistoryEnvelopeRow';
-
-function currentPeriod(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-}
 
 export default function HistoryScreen() {
   const history = useStore((s) => s.history);

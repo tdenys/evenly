@@ -3,12 +3,13 @@ import { supabase } from '@/lib/supabase';
 import type { Amount, Envelope } from '@/core/waterfall/types';
 import { findSiblings } from '@/core/waterfall/tree';
 import { runWaterfall } from '@/core/waterfall/engine';
-import type { PaydayAction, PaydayAmount } from '@/core/payday/types';
+import type { PaydayAction, PaydayAmount, PaydayCheck } from '@/core/payday/types';
 import type { Subscription, SubscriptionFrequency } from '@/core/subscriptions/types';
 import type { Account } from '@/core/accounts/types';
 import type { BudgetSnapshot } from '@/core/history/types';
 import { buildEnvelopeSnapshot } from '@/core/history/buildSnapshot';
 import { orderCouple, coupleIncome } from '@/lib/couple';
+import { currentPeriod } from '@/lib/format';
 
 // accountId, comme ownerId, est une FK vers une autre table (accounts) — bolted-on ici plutôt
 // que dans le type pur PaydayAction, qui n'a aucun usage pour ni l'un ni l'autre (voir
@@ -40,6 +41,7 @@ interface StoreState {
   subscriptions: Subscription[];
   accounts: Account[];
   history: BudgetSnapshot[];
+  paydayChecks: PaydayCheck[];
   error: string | null;
 
   init: () => void;
@@ -127,6 +129,8 @@ interface StoreState {
   loadHistory: () => Promise<void>;
   closeCurrentMonth: () => Promise<void>;
   deleteSnapshot: (id: string) => Promise<void>;
+  loadPaydayChecks: () => Promise<void>;
+  togglePaydayCheck: (actionId: string) => Promise<void>;
 }
 
 const INVITE_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -149,6 +153,7 @@ export const useStore = create<StoreState>((set, get) => ({
   subscriptions: [],
   accounts: [],
   history: [],
+  paydayChecks: [],
   error: null,
 
   init: () => {
@@ -164,6 +169,7 @@ export const useStore = create<StoreState>((set, get) => ({
           subscriptions: [],
           accounts: [],
           history: [],
+          paydayChecks: [],
         });
         return;
       }
@@ -483,6 +489,10 @@ export const useStore = create<StoreState>((set, get) => ({
     if (error) throw error;
 
     await get().loadPaydayActions();
+    // La cascade DB supprime déjà les payday_checks de cette action, mais le cache local
+    // paydayChecks doit être resynchronisé pour ne pas garder une ligne fantôme jusqu'au
+    // prochain focus.
+    await get().loadPaydayChecks();
   },
 
   reorderPaydayActionTo: async (id, targetIndex) => {
@@ -649,11 +659,7 @@ export const useStore = create<StoreState>((set, get) => ({
     const income = coupleIncome(profile, partner);
     const result = runWaterfall({ income, envelopes });
     const envelopeSnapshot = buildEnvelopeSnapshot(envelopes, result.envelopeResults);
-
-    // Mois calendaire local (pas UTC) : un `new Date().toISOString()` pourrait faire basculer
-    // le mois autour de minuit selon le fuseau de l'appareil.
-    const now = new Date();
-    const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    const period = currentPeriod();
 
     const { error } = await supabase.from('budget_snapshots').upsert(
       {
@@ -676,6 +682,52 @@ export const useStore = create<StoreState>((set, get) => ({
     if (error) throw error;
 
     await get().loadHistory();
+  },
+
+  // Contrairement aux autres domaines, scope aussi sur `period` (mois courant) et pas tout
+  // l'historique du couple — la v1 de la checklist n'affiche/n'interagit qu'avec le mois en
+  // cours (voir HistoryScreen pour un futur écran de consultation du passé si le besoin se
+  // confirme).
+  loadPaydayChecks: async () => {
+    const { couple } = get();
+    if (!couple) return;
+
+    const { data, error } = await supabase
+      .from('payday_checks')
+      .select('id, action_id, period')
+      .eq('couple_id', couple.id)
+      .eq('period', currentPeriod());
+    if (error) throw error;
+
+    const paydayChecks: PaydayCheck[] = (data ?? []).map((row) => ({
+      id: row.id,
+      actionId: row.action_id,
+      period: row.period,
+    }));
+
+    set({ paydayChecks });
+  },
+
+  // Cocher/décocher est modélisé par la présence de la ligne (insert/delete), jamais un update —
+  // voir le commentaire de la policy RLS dans supabase/migration.sql.
+  togglePaydayCheck: async (actionId) => {
+    const { couple, paydayChecks } = get();
+    if (!couple) throw new Error('Aucun couple actif.');
+
+    const period = currentPeriod();
+    const existing = paydayChecks.find((c) => c.actionId === actionId && c.period === period);
+
+    if (existing) {
+      const { error } = await supabase.from('payday_checks').delete().eq('id', existing.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('payday_checks')
+        .insert({ couple_id: couple.id, action_id: actionId, period });
+      if (error) throw error;
+    }
+
+    await get().loadPaydayChecks();
   },
 }));
 
