@@ -35,3 +35,11 @@ export interface PaydayResult {
   actionResults: PaydayActionResult[];
   remainder: number; // ce qu'il reste après la dernière action
 }
+
+// Une coche pour le mois `period` sur l'action `actionId` — la présence de l'objet EST l'état
+// "coché" (voir useStore.ts::togglePaydayCheck), pas de champ booléen séparé.
+export interface PaydayCheck {
+  id: string;
+  actionId: string;
+  period: string; // 'YYYY-MM-01'
+}

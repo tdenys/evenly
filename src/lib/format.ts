@@ -19,3 +19,10 @@ export function formatPct(amount: number, ofTotal: number): string | null {
 export function formatPeriodLabel(period: string): string {
   return new Date(period).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
 }
+
+/** Mois calendaire local (pas UTC) sous forme 'YYYY-MM-01' — le format `period` partagé par
+ * budget_snapshots et payday_checks. */
+export function currentPeriod(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+}
