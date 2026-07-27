@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import {
   createNavigationContainerRef,
   NavigationContainer,
@@ -7,9 +7,9 @@ import {
 } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { History, Plus, Settings as SettingsIcon, Shuffle, Smartphone, Wallet, type LucideIcon } from 'lucide-react-native';
+import { ChartLine, Clock, House, Plus, SquareStack, User, type LucideIcon } from 'lucide-react-native';
 import { useStore } from '@/store/useStore';
-import { colors, ink } from '@/theme/colors';
+import { colors } from '@/theme/colors';
 import { fonts } from '@/theme/typography';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import LoginScreen from '@/screens/auth/LoginScreen';
@@ -48,7 +48,7 @@ export type MainTabParamList = {
 // s'affichent en modale par-dessus la tab bar, pas comme un 5e onglet.
 export type RootStackParamList = {
   Tabs: NavigatorScreenParams<MainTabParamList> | undefined;
-  EnvelopeForm: { envelopeId?: string; parentId?: string };
+  EnvelopeForm: { envelopeId?: string; parentId?: string; period: string };
   IncomeForm: undefined;
   PaydayActionForm: { actionId?: string; ownerId: string };
   SubscriptionForm: { subscriptionId?: string };
@@ -74,11 +74,11 @@ function AuthNavigator() {
 }
 
 const TAB_ICONS: Record<keyof MainTabParamList, LucideIcon> = {
-  Waterfall: Wallet,
-  Payday: Shuffle,
-  Subscriptions: Smartphone,
-  History: History,
-  Settings: SettingsIcon,
+  Waterfall: House,
+  Payday: Clock,
+  Subscriptions: SquareStack,
+  History: ChartLine,
+  Settings: User,
 };
 const TAB_LABELS: Record<keyof MainTabParamList, string> = {
   Waterfall: 'Budget',
@@ -95,23 +95,50 @@ function tabIcon(route: keyof MainTabParamList) {
 
 function HeaderAddButton({ onPress, color }: { onPress: () => void; color: string }) {
   return (
-    <TouchableOpacity onPress={onPress} hitSlop={8} style={{ paddingHorizontal: 16 }}>
-      <Plus size={24} color={color} strokeWidth={2.5} />
+    <TouchableOpacity onPress={onPress} hitSlop={8} style={headerStyles.addButton}>
+      <Plus size={16} color={color} strokeWidth={2.5} />
     </TouchableOpacity>
   );
 }
+
+// Petit carré sombre devant le titre de chaque écran d'onglet — présent de façon cohérente sur
+// tous les écrans de la maquette importée, appliqué ici une seule fois plutôt que par écran.
+function HeaderTitleWithMark({ children }: { children?: string }) {
+  return (
+    <View style={headerStyles.titleRow}>
+      <View style={headerStyles.mark} />
+      <Text style={headerStyles.titleText}>{children}</Text>
+    </View>
+  );
+}
+
+const headerStyles = StyleSheet.create({
+  addButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginRight: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.section,
+  },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  mark: { width: 18, height: 18, borderRadius: 5, backgroundColor: colors.ink },
+  titleText: { fontFamily: fonts.bold, fontSize: 16.5, color: colors.ink },
+});
 
 function MainTabs() {
   return (
     <Tab.Navigator
       screenOptions={{
         tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: ink(0.4),
-        tabBarLabelStyle: { fontFamily: fonts.karlaBold, fontSize: 10 },
+        tabBarInactiveTintColor: colors.tertiary,
+        tabBarLabelStyle: { fontFamily: fonts.bold, fontSize: 10 },
         tabBarStyle: { borderTopColor: colors.borderSubtle, backgroundColor: colors.surface },
         headerStyle: { backgroundColor: colors.surface },
         headerShadowVisible: false,
-        headerTitleStyle: { fontFamily: fonts.karlaBold, fontSize: 16.5, color: colors.ink },
+        headerTitleStyle: { fontFamily: fonts.bold, fontSize: 16.5, color: colors.ink },
+        headerTitle: ({ children }) => <HeaderTitleWithMark>{children}</HeaderTitleWithMark>,
       }}
     >
       <Tab.Screen
@@ -121,12 +148,6 @@ function MainTabs() {
           title: TAB_LABELS.Waterfall,
           tabBarLabel: TAB_LABELS.Waterfall,
           tabBarIcon: tabIcon('Waterfall'),
-          headerRight: ({ tintColor }) => (
-            <HeaderAddButton
-              onPress={() => navigationRef.navigate('EnvelopeForm', {})}
-              color={tintColor ?? colors.primary}
-            />
-          ),
         }}
       />
       <Tab.Screen

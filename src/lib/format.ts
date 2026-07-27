@@ -26,3 +26,12 @@ export function currentPeriod(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
 }
+
+/** Décale un period ('YYYY-MM-01') de `deltaMonths` mois (négatif = mois précédents) — getters
+ * locaux uniquement (jamais toISOString, UTC), pour rester comparable string-à-string avec
+ * currentPeriod() sans dérive de fuseau horaire près d'une frontière de mois. */
+export function shiftPeriod(period: string, deltaMonths: number): string {
+  const [year, month] = period.split('-').map(Number);
+  const date = new Date(year, month - 1 + deltaMonths, 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
+}

@@ -1,5 +1,4 @@
 import type { Income } from '@/core/waterfall/types';
-import { colors } from '@/theme/colors';
 
 interface PersonLike {
   id: string;
@@ -45,8 +44,3 @@ export function coupleLabels(
   return { A: personA.displayName, B: personB.displayName };
 }
 
-/** Couleur de personne stable (Accent A/B) — indépendante de "moi"/"partenaire", comme le
- * reste de l'identité A/B (voir orderCouple). */
-export function personAccent(who: 'A' | 'B'): string {
-  return who === 'A' ? colors.accentA : colors.accentB;
-}

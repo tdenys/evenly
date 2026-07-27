@@ -4,7 +4,7 @@ import type { Amount, Envelope, EnvelopeResult } from '@/core/waterfall/types';
 import { describeAllocation, type PersonLabels } from './EnvelopeTreeRow';
 import AmountEditor from './AmountEditor';
 import { formatAmount, formatPct } from '@/lib/format';
-import { colors, ink } from '@/theme/colors';
+import { colors, ink, withOpacity } from '@/theme/colors';
 import { fonts } from '@/theme/typography';
 
 interface Props {
@@ -150,25 +150,25 @@ const styles = StyleSheet.create({
   },
   textBlock: { flex: 1 },
   main: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  label: { flex: 1, fontFamily: fonts.karlaBold, fontSize: 14, color: colors.ink },
-  amount: { fontFamily: fonts.spectralSemiBold, fontSize: 15, color: colors.ink },
+  label: { flex: 1, fontFamily: fonts.bold, fontSize: 14, color: colors.ink },
+  amount: { fontFamily: fonts.semiBold, fontSize: 15, color: colors.ink },
   descriptionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 },
-  description: { fontFamily: fonts.karlaMedium, fontSize: 11.5, color: ink(0.5), flexShrink: 1 },
+  description: { fontFamily: fonts.medium, fontSize: 11.5, color: ink(0.5), flexShrink: 1 },
   descriptionRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  delta: { fontFamily: fonts.karlaBold, fontSize: 11.5 },
-  deltaUp: { color: colors.accentB },
+  delta: { fontFamily: fonts.bold, fontSize: 11.5 },
+  deltaUp: { color: colors.primary },
   deltaDown: { color: colors.danger },
-  pct: { fontFamily: fonts.karlaMedium, fontSize: 11.5, color: ink(0.5) },
+  pct: { fontFamily: fonts.medium, fontSize: 11.5, color: ink(0.5) },
   modalRoot: { flex: 1 },
   modalBackdrop: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(20, 18, 15, 0.45)',
+    backgroundColor: withOpacity(colors.ink, 0.45),
     padding: 24,
   },
-  modalCard: { width: '100%', maxWidth: 360, borderRadius: 16, backgroundColor: colors.surface, padding: 18, gap: 12 },
-  modalTitle: { fontFamily: fonts.karlaBold, fontSize: 15, color: colors.ink, marginBottom: 2 },
+  modalCard: { width: '100%', maxWidth: 360, borderRadius: 14, backgroundColor: colors.surface, padding: 18, gap: 12 },
+  modalTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink, marginBottom: 2 },
   modalDone: { alignSelf: 'flex-end', paddingVertical: 4, paddingHorizontal: 4 },
-  modalDoneText: { fontFamily: fonts.karlaBold, fontSize: 13.5, color: colors.primary },
+  modalDoneText: { fontFamily: fonts.bold, fontSize: 13.5, color: colors.primary },
 });

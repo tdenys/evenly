@@ -156,7 +156,6 @@ export default function SubscriptionFormScreen({ route, navigation }: Props) {
               label={chipLabel}
               selected={assignedTo === value}
               onPress={() => setAssignedTo(value)}
-              gradient={value === 'both'}
             />
           ))}
         </ChipRow>
@@ -184,19 +183,19 @@ export default function SubscriptionFormScreen({ route, navigation }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: 16, gap: 14, paddingBottom: 48 },
-  headerAction: { fontFamily: fonts.karlaSemiBold, fontSize: 14.5, color: ink(0.55), paddingHorizontal: 4 },
-  headerActionPrimary: { color: colors.primary, fontFamily: fonts.karlaBold },
+  headerAction: { fontFamily: fonts.semiBold, fontSize: 14.5, color: ink(0.55), paddingHorizontal: 4 },
+  headerActionPrimary: { color: colors.primary, fontFamily: fonts.bold },
   headerActionDisabled: { opacity: 0.5 },
   fieldLabel: { ...type.fieldLabel, color: ink(0.6) },
   input: {
     borderWidth: 1.5,
     borderColor: colors.borderInput,
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: colors.surface,
     padding: 12,
-    fontFamily: fonts.karlaMedium,
+    fontFamily: fonts.medium,
     fontSize: 15,
     color: colors.ink,
   },
-  hint: { fontFamily: fonts.karlaSemiBold, fontSize: 12.5, color: colors.warning },
+  hint: { fontFamily: fonts.semiBold, fontSize: 12.5, color: colors.warning },
 });

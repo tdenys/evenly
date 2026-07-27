@@ -64,21 +64,21 @@ export default function CreateOrJoinCoupleScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: 'center', backgroundColor: colors.bg, padding: 24, gap: 12 },
-  title: { fontFamily: fonts.spectralSemiBold, fontSize: 24, color: colors.ink, textAlign: 'center' },
-  subtitle: { fontFamily: fonts.karlaMedium, fontSize: 14.5, color: ink(0.55), textAlign: 'center', marginBottom: 16 },
+  title: { fontFamily: fonts.semiBold, fontSize: 24, color: colors.ink, textAlign: 'center' },
+  subtitle: { fontFamily: fonts.medium, fontSize: 14.5, color: ink(0.55), textAlign: 'center', marginBottom: 16 },
   input: {
     borderWidth: 1.5,
     borderColor: colors.borderInput,
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: colors.surface,
     padding: 14,
-    fontFamily: fonts.karlaMedium,
+    fontFamily: fonts.medium,
     fontSize: 15,
     color: colors.ink,
     textAlign: 'center',
     letterSpacing: 2,
   },
-  or: { fontFamily: fonts.karlaBold, fontSize: 11, color: ink(0.4), textAlign: 'center', marginVertical: 4 },
+  or: { fontFamily: fonts.bold, fontSize: 11, color: ink(0.4), textAlign: 'center', marginVertical: 4 },
   signOut: { marginTop: 32 },
-  link: { fontFamily: fonts.karlaSemiBold, fontSize: 13, color: ink(0.4), textAlign: 'center' },
+  link: { fontFamily: fonts.semiBold, fontSize: 13, color: ink(0.4), textAlign: 'center' },
 });

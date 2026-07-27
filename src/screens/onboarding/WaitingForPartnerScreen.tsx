@@ -75,8 +75,8 @@ export default function WaitingForPartnerScreen() {
 
 const styles = StyleSheet.create({
   container: { flexGrow: 1, justifyContent: 'center', backgroundColor: colors.bg, padding: 24, gap: 12 },
-  title: { fontFamily: fonts.spectralSemiBold, fontSize: 22, color: colors.ink, textAlign: 'center' },
-  subtitle: { fontFamily: fonts.karlaMedium, fontSize: 14.5, color: ink(0.55), textAlign: 'center', marginBottom: 16 },
+  title: { fontFamily: fonts.semiBold, fontSize: 22, color: colors.ink, textAlign: 'center' },
+  subtitle: { fontFamily: fonts.medium, fontSize: 14.5, color: ink(0.55), textAlign: 'center', marginBottom: 16 },
   codeRow: { flexDirection: 'row', justifyContent: 'center', gap: 8 },
   codeBox: {
     width: 42,
@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  codeChar: { fontFamily: fonts.spectralSemiBold, fontSize: 22, color: colors.primary },
+  codeChar: { fontFamily: fonts.semiBold, fontSize: 22, color: colors.primary },
   copyButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -101,10 +101,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginTop: 16,
   },
-  copyButtonText: { fontFamily: fonts.karlaBold, fontSize: 13, color: colors.primary },
+  copyButtonText: { fontFamily: fonts.bold, fontSize: 13, color: colors.primary },
   statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 24 },
-  pulsingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.accentB, opacity: 0.8 },
-  statusText: { fontFamily: fonts.karlaMedium, fontSize: 13, color: ink(0.55) },
+  pulsingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary, opacity: 0.8 },
+  statusText: { fontFamily: fonts.medium, fontSize: 13, color: ink(0.55) },
   signOut: { marginTop: 32 },
-  link: { fontFamily: fonts.karlaSemiBold, fontSize: 13, color: ink(0.4), textAlign: 'center' },
+  link: { fontFamily: fonts.semiBold, fontSize: 13, color: ink(0.4), textAlign: 'center' },
 });

@@ -1,7 +1,6 @@
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Pencil, TriangleAlert } from 'lucide-react-native';
-import { colors, ink, personGradient, withOpacity } from '@/theme/colors';
+import { colors, ink } from '@/theme/colors';
 import { fonts } from '@/theme/typography';
 
 interface Alert {
@@ -23,7 +22,7 @@ interface Props {
    * montants "prorata revenus"). */
   breakdown?: BreakdownItem[];
   alert?: Alert | null;
-  /** hero = dégradé Accent A/B à 12% (carte "Revenu total du couple"), secondary = fond neutre
+  /** hero = fond teinté à l'accent (carte "Revenu total du couple"), secondary = fond neutre
    * (les autres totaux, ex. "Coût mensuel total" des Abonnements). */
   variant?: 'hero' | 'secondary';
   /** Rend la carte tappable (ex: "Revenu total du couple" ouvre l'édition des revenus). Affiche
@@ -66,23 +65,11 @@ export default function SummaryCard({ label, amount, breakdown, alert, variant =
   const Wrapper = onPress ? TouchableOpacity : View;
   const wrapperProps = onPress ? { onPress, activeOpacity: 0.8 } : {};
 
-  if (variant === 'hero') {
-    return (
-      <Wrapper {...wrapperProps}>
-        <LinearGradient
-          colors={[withOpacity(personGradient[0], 0.12), withOpacity(personGradient[1], 0.12)]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.card}
-        >
-          {content}
-        </LinearGradient>
-      </Wrapper>
-    );
-  }
-
   return (
-    <Wrapper {...wrapperProps} style={[styles.card, { backgroundColor: colors.section }]}>
+    <Wrapper
+      {...wrapperProps}
+      style={[styles.card, { backgroundColor: variant === 'hero' ? colors.primaryTint : colors.section }]}
+    >
       {content}
     </Wrapper>
   );
@@ -92,13 +79,25 @@ const styles = StyleSheet.create({
   // Ligne label/montant plutôt qu'un empilement centré (libellé, gros montant, alerte) — prend
   // beaucoup moins de hauteur, laisse plus de place à la liste d'enveloppes qui est le vrai
   // contenu principal de l'écran.
-  card: { borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16, gap: 4 },
+  card: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.borderInput,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 4,
+    shadowColor: colors.ink,
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 2,
+  },
   breakdown: { gap: 1, marginBottom: 2 },
-  breakdownText: { fontFamily: fonts.karlaMedium, fontSize: 10.5, color: ink(0.5) },
+  breakdownText: { fontFamily: fonts.medium, fontSize: 10.5, color: ink(0.5) },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  label: { fontFamily: fonts.karlaSemiBold, fontSize: 12.5, color: ink(0.6) },
-  amount: { fontFamily: fonts.spectralSemiBold, fontSize: 22, color: colors.ink },
+  label: { fontFamily: fonts.semiBold, fontSize: 12.5, color: ink(0.6) },
+  amount: { fontFamily: fonts.semiBold, fontSize: 22, color: colors.ink },
   alertRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  alert: { fontFamily: fonts.karlaBold, fontSize: 11.5 },
+  alert: { fontFamily: fonts.bold, fontSize: 11.5 },
   editHint: { position: 'absolute', top: 10, right: 12 },
 });

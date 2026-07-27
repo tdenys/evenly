@@ -34,6 +34,9 @@ export default function SignUpScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
+      <View style={styles.logoMark}>
+        <View style={styles.logoMarkDot} />
+      </View>
       <Text style={styles.title}>Evenly</Text>
       <Text style={styles.subtitle}>Créer un compte</Text>
       <TextInput
@@ -70,17 +73,28 @@ export default function SignUpScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: 'center', backgroundColor: colors.bg, padding: 24, gap: 12 },
-  title: { fontFamily: fonts.spectralSemiBold, fontSize: 30, color: colors.ink, textAlign: 'center' },
-  subtitle: { fontFamily: fonts.karlaMedium, fontSize: 14.5, color: ink(0.55), textAlign: 'center', marginBottom: 20 },
+  logoMark: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: 4,
+  },
+  logoMarkDot: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#FFFFFF' },
+  title: { fontFamily: fonts.extraBold, fontSize: 30, color: colors.ink, textAlign: 'center' },
+  subtitle: { fontFamily: fonts.medium, fontSize: 14.5, color: ink(0.55), textAlign: 'center', marginBottom: 20 },
   input: {
     borderWidth: 1.5,
     borderColor: colors.borderInput,
-    borderRadius: 12,
-    backgroundColor: colors.surface,
+    borderRadius: 10,
+    backgroundColor: colors.section,
     padding: 14,
-    fontFamily: fonts.karlaMedium,
+    fontFamily: fonts.medium,
     fontSize: 15,
     color: colors.ink,
   },
-  link: { fontFamily: fonts.karlaSemiBold, fontSize: 13.5, color: colors.primary, textAlign: 'center', marginTop: 16 },
+  link: { fontFamily: fonts.semiBold, fontSize: 13.5, color: colors.primary, textAlign: 'center', marginTop: 16 },
 });

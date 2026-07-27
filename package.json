@@ -3,8 +3,7 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
-    "@expo-google-fonts/karla": "^0.4.2",
-    "@expo-google-fonts/spectral": "^0.4.1",
+    "@expo-google-fonts/inter": "^0.4.1",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-navigation/bottom-tabs": "^7.18.8",
     "@react-navigation/native": "^7.3.7",
@@ -14,7 +13,6 @@
     "expo-clipboard": "~57.0.0",
     "expo-dev-client": "~57.0.5",
     "expo-font": "~57.0.0",
-    "expo-linear-gradient": "~57.0.0",
     "expo-notifications": "~57.0.3",
     "expo-status-bar": "~57.0.0",
     "expo-updates": "~57.0.7",

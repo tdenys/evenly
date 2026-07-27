@@ -11,6 +11,11 @@ function parseIncome(text: string): number | null {
   return Number.isNaN(parsed) || parsed < 0 ? null : parsed;
 }
 
+// Couleurs de personne stables (A/B, jamais "moi"/"partenaire") — locales à ce fichier : la
+// palette globale n'a plus de duo de couleurs par personne (voir theme/colors.ts), mais cette
+// distinction visuelle entre 2 champs du même formulaire reste une UX réelle à préserver.
+const PERSON_ACCENTS = { A: colors.primary, B: '#7C3AED' } as const;
+
 interface IncomeFieldProps {
   label: string;
   netIncome: number;
@@ -19,10 +24,10 @@ interface IncomeFieldProps {
 }
 
 /** Un salaire éditable — même formulaire pour "mon" revenu et celui du/de la partenaire, les
- * deux étant modifiables depuis n'importe quel compte. Teinté à l'accent de la personne pour
- * suivre le pattern "Duo bicolore" (jamais "moi"/"partenaire" en couleur, mais Accent A/B,
- * stable). Chaque champ a son propre bouton Enregistrer (pas de bouton global en en-tête) car
- * les deux revenus sont indépendants. */
+ * deux étant modifiables depuis n'importe quel compte. Teinté à l'accent de la personne (jamais
+ * "moi"/"partenaire" en couleur, mais A/B, stable — voir PERSON_ACCENTS). Chaque champ a son
+ * propre bouton Enregistrer (pas de bouton global en en-tête) car les deux revenus sont
+ * indépendants. */
 function IncomeField({ label, netIncome, accent, onSave }: IncomeFieldProps) {
   const [text, setText] = useState(String(netIncome));
   const [saving, setSaving] = useState(false);
@@ -83,13 +88,13 @@ export default function IncomeFormScreen() {
       <IncomeField
         label="Mon revenu net"
         netIncome={profile?.netIncome ?? 0}
-        accent={colors.accentA}
+        accent={PERSON_ACCENTS.A}
         onSave={updateMyIncome}
       />
       <IncomeField
         label={`Revenu de ${partner?.displayName ?? 'ton/ta partenaire'}`}
         netIncome={partner?.netIncome ?? 0}
-        accent={colors.accentB}
+        accent={PERSON_ACCENTS.B}
         onSave={updatePartnerIncome}
       />
     </View>
@@ -98,17 +103,17 @@ export default function IncomeFormScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg, padding: 16, gap: 14 },
-  card: { borderRadius: 16, borderWidth: 1.5, padding: 16, gap: 12 },
+  card: { borderRadius: 14, borderWidth: 1.5, padding: 16, gap: 12 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   dot: { width: 8, height: 8, borderRadius: 4 },
-  label: { fontFamily: fonts.karlaBold, fontSize: 13, color: ink(0.65) },
+  label: { fontFamily: fonts.bold, fontSize: 13, color: ink(0.65) },
   input: {
     borderWidth: 1.5,
     borderColor: colors.borderInput,
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: colors.surface,
     padding: 12,
-    fontFamily: fonts.spectralSemiBold,
+    fontFamily: fonts.semiBold,
     fontSize: 20,
     color: colors.ink,
   },

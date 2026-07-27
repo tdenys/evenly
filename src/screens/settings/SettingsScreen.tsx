@@ -8,6 +8,11 @@ import { colors, ink, withOpacity } from '@/theme/colors';
 import { fonts } from '@/theme/typography';
 import Button from '@/components/ui/Button';
 
+// Couleurs de personne stables (A/B, jamais "moi"/"partenaire") — locales à ce fichier, même
+// précédent que IncomeFormScreen.tsx (la palette globale n'a plus de duo de couleurs par
+// personne, voir theme/colors.ts).
+const PERSON_ACCENTS = { A: colors.primary, B: '#7C3AED' } as const;
+
 interface NameFieldProps {
   label: string;
   displayName: string;
@@ -204,13 +209,13 @@ export default function SettingsScreen() {
       <NameField
         label="Mon prénom"
         displayName={profile?.displayName ?? ''}
-        accent={colors.accentA}
+        accent={PERSON_ACCENTS.A}
         onSave={updateMyDisplayName}
       />
       <NameField
         label={`Prénom de ${partner?.displayName ?? 'ton/ta partenaire'}`}
         displayName={partner?.displayName ?? ''}
-        accent={colors.accentB}
+        accent={PERSON_ACCENTS.B}
         onSave={updatePartnerDisplayName}
       />
 
@@ -234,21 +239,21 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: 16, gap: 14, paddingBottom: 48 },
   sectionLabel: {
-    fontFamily: fonts.karlaBold,
+    fontFamily: fonts.bold,
     fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
     color: ink(0.42),
   },
   card: {
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1.5,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.section,
     padding: 16,
     gap: 12,
   },
-  updateStatus: { fontFamily: fonts.karlaMedium, fontSize: 13, color: ink(0.55) },
+  updateStatus: { fontFamily: fonts.medium, fontSize: 13, color: ink(0.55) },
   accountRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -257,19 +262,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle,
   },
-  accountLabel: { fontFamily: fonts.karlaMedium, fontSize: 14, color: colors.ink, flex: 1, marginRight: 8 },
+  accountLabel: { fontFamily: fonts.medium, fontSize: 14, color: colors.ink, flex: 1, marginRight: 8 },
   accountAddRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
   accountInput: { flex: 1 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   dot: { width: 8, height: 8, borderRadius: 4 },
-  label: { fontFamily: fonts.karlaBold, fontSize: 13, color: ink(0.65) },
+  label: { fontFamily: fonts.bold, fontSize: 13, color: ink(0.65) },
   input: {
     borderWidth: 1.5,
     borderColor: colors.borderInput,
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: colors.surface,
     padding: 12,
-    fontFamily: fonts.karlaMedium,
+    fontFamily: fonts.medium,
     fontSize: 16,
     color: colors.ink,
   },

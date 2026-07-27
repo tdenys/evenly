@@ -13,7 +13,7 @@ import { runWaterfall } from '@/core/waterfall/engine';
 import { findEnvelope, findEnvelopeResult } from '@/core/waterfall/tree';
 import type { Envelope } from '@/core/waterfall/types';
 import { coupleIncome, orderCouple } from '@/lib/couple';
-import { formatAmount, formatPct } from '@/lib/format';
+import { currentPeriod, formatAmount, formatPct } from '@/lib/format';
 import { errorMessage, notify } from '@/lib/alert';
 import { colors, ink } from '@/theme/colors';
 import { fonts } from '@/theme/typography';
@@ -53,7 +53,7 @@ export default function SubscriptionsScreen({ navigation }: Props) {
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
-      Promise.all([loadSubscriptions(), loadEnvelopes(), refresh()])
+      Promise.all([loadSubscriptions(), loadEnvelopes(currentPeriod()), refresh()])
         .catch((err) => notify('Erreur', errorMessage(err)))
         .finally(() => setLoading(false));
     }, [loadSubscriptions, loadEnvelopes, refresh])
@@ -220,9 +220,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tabSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
-  tabText: { fontFamily: fonts.karlaSemiBold, fontSize: 11, color: ink(0.65) },
-  tabTextSelected: { color: '#fff', fontFamily: fonts.karlaBold },
-  empty: { fontFamily: fonts.karlaMedium, textAlign: 'center', color: ink(0.4), marginTop: 32 },
+  tabText: { fontFamily: fonts.semiBold, fontSize: 11, color: ink(0.65) },
+  tabTextSelected: { color: '#fff', fontFamily: fonts.bold },
+  empty: { fontFamily: fonts.medium, textAlign: 'center', color: ink(0.4), marginTop: 32 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -232,11 +232,11 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.borderSubtle,
   },
   rowText: { flex: 1 },
-  rowTitle: { fontFamily: fonts.karlaBold, fontSize: 14, color: colors.ink },
-  rowDescription: { fontFamily: fonts.karlaMedium, fontSize: 11.5, color: ink(0.5), marginTop: 2 },
-  rowLinked: { fontFamily: fonts.karlaSemiBold, fontSize: 11, color: ink(0.45), marginTop: 2 },
+  rowTitle: { fontFamily: fonts.bold, fontSize: 14, color: colors.ink },
+  rowDescription: { fontFamily: fonts.medium, fontSize: 11.5, color: ink(0.5), marginTop: 2 },
+  rowLinked: { fontFamily: fonts.semiBold, fontSize: 11, color: ink(0.45), marginTop: 2 },
   rowLinkedOver: { color: colors.danger },
-  rowAmount: { fontFamily: fonts.spectralSemiBold, fontSize: 15, color: colors.ink },
+  rowAmount: { fontFamily: fonts.semiBold, fontSize: 15, color: colors.ink },
   groupCard: {
     borderRadius: 14,
     backgroundColor: colors.section,
@@ -246,9 +246,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   groupRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  groupLabel: { flex: 1, fontFamily: fonts.karlaSemiBold, fontSize: 13, color: colors.ink },
-  groupAmount: { fontFamily: fonts.spectralSemiBold, fontSize: 13.5, color: colors.ink },
-  groupPct: { fontFamily: fonts.karlaBold, fontSize: 12.5, color: ink(0.5), width: 50, textAlign: 'right' },
+  groupLabel: { flex: 1, fontFamily: fonts.semiBold, fontSize: 13, color: colors.ink },
+  groupAmount: { fontFamily: fonts.semiBold, fontSize: 13.5, color: colors.ink },
+  groupPct: { fontFamily: fonts.bold, fontSize: 12.5, color: ink(0.5), width: 50, textAlign: 'right' },
   groupPctOver: { color: colors.danger },
   editZone: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
 });
