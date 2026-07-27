@@ -476,3 +476,14 @@ alter table envelopes add constraint envelopes_goal_consistency
 -- envelopes.parent_id (cascade) — supprimer une enveloppe ne doit jamais supprimer les
 -- abonnements qui pointaient dessus, ils repassent juste à "Aucune".
 alter table subscriptions add column envelope_id uuid references envelopes(id) on delete set null;
+
+-- ============================================================
+-- V2 — Waterfall daté (un budget indépendant par mois/année)
+-- ============================================================
+
+-- DEFAULT volatile (now()) : évalué UNE SEULE FOIS au moment de l'ALTER TABLE pour backfiller
+-- toutes les lignes existantes à la même valeur (le mois réel où la migration est collée) — les
+-- enveloppes actuelles deviennent "le budget de ce mois-ci". Reste aussi le default vivant pour
+-- tout futur insert qui omettrait la colonne (filet de sécurité, jamais utilisé en pratique :
+-- l'app envoie toujours period explicitement).
+alter table envelopes add column period date not null default (date_trunc('month', now()))::date;

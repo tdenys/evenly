@@ -24,7 +24,7 @@ export default function HistoryScreen() {
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
-      Promise.all([loadHistory(), loadEnvelopes(), refresh()])
+      Promise.all([loadHistory(), loadEnvelopes(currentPeriod()), refresh()])
         .catch((err) => notify('Erreur', errorMessage(err)))
         .finally(() => setLoading(false));
     }, [loadHistory, loadEnvelopes, refresh])
@@ -111,16 +111,16 @@ export default function HistoryScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: 16, paddingBottom: 48, gap: 14 },
-  empty: { fontFamily: fonts.karlaMedium, textAlign: 'center', color: ink(0.4), marginTop: 32 },
+  empty: { fontFamily: fonts.medium, textAlign: 'center', color: ink(0.4), marginTop: 32 },
   card: {
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1.5,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.section,
     overflow: 'hidden',
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 14 },
-  rowLabel: { flex: 1, fontFamily: fonts.karlaBold, fontSize: 14, color: colors.ink, textTransform: 'capitalize' },
-  rowAmount: { fontFamily: fonts.spectralSemiBold, fontSize: 15, color: colors.ink },
+  rowLabel: { flex: 1, fontFamily: fonts.bold, fontSize: 14, color: colors.ink, textTransform: 'capitalize' },
+  rowAmount: { fontFamily: fonts.semiBold, fontSize: 15, color: colors.ink },
   detail: { paddingHorizontal: 14, paddingBottom: 10 },
 });

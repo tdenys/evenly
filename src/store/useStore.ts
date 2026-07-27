@@ -62,7 +62,7 @@ interface StoreState {
   updatePartnerIncome: (netIncome: number) => Promise<void>;
   updateMyPaydayDay: (day: number | null) => Promise<void>;
   updatePartnerPaydayDay: (day: number | null) => Promise<void>;
-  loadEnvelopes: () => Promise<void>;
+  loadEnvelopes: (period: string) => Promise<void>;
   createEnvelope: (input: {
     label: string;
     emoji: string;
@@ -72,6 +72,7 @@ interface StoreState {
     fundedBy: 'A' | 'B' | 'both' | null;
     goal: EnvelopeGoal | null;
     parentId: string | null;
+    period: string;
   }) => Promise<void>;
   updateEnvelope: (
     id: string,
@@ -83,12 +84,13 @@ interface StoreState {
       enabled: boolean;
       fundedBy: 'A' | 'B' | 'both' | null;
       goal: EnvelopeGoal | null;
+      period: string;
     }
   ) => Promise<void>;
-  deleteEnvelope: (id: string) => Promise<void>;
-  reorderEnvelopeTo: (id: string, targetIndex: number) => Promise<void>;
-  setEnvelopeEnabled: (id: string, enabled: boolean) => Promise<void>;
-  updateEnvelopeGoalBalance: (id: string, current: number) => Promise<void>;
+  deleteEnvelope: (id: string, period: string) => Promise<void>;
+  reorderEnvelopeTo: (id: string, targetIndex: number, period: string) => Promise<void>;
+  setEnvelopeEnabled: (id: string, enabled: boolean, period: string) => Promise<void>;
+  updateEnvelopeGoalBalance: (id: string, current: number, period: string) => Promise<void>;
   loadPaydayActions: () => Promise<void>;
   createPaydayAction: (input: {
     ownerId: string;
@@ -144,6 +146,10 @@ interface StoreState {
 }
 
 const INVITE_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+// Periods actuellement en cours de seed automatique (voir loadEnvelopes) — évite qu'un
+// chargement concurrent du même mois vide ne déclenche une double-duplication.
+const seedingPeriods = new Set<string>();
 
 function generateInviteCode(): string {
   let code = '';
@@ -310,7 +316,7 @@ export const useStore = create<StoreState>((set, get) => ({
     await get().refresh();
   },
 
-  loadEnvelopes: async () => {
+  loadEnvelopes: async (period) => {
     const { couple } = get();
     if (!couple) return;
 
@@ -318,10 +324,33 @@ export const useStore = create<StoreState>((set, get) => ({
       .from('envelopes')
       .select('id, parent_id, label, emoji, priority, allocation, enabled, funded_by, goal_target, goal_current')
       .eq('couple_id', couple.id)
+      .eq('period', period)
       .order('priority', { ascending: true });
     if (error) throw error;
 
-    const rows = data ?? [];
+    let rows = data ?? [];
+
+    // Mois sans aucune enveloppe : hérite automatiquement de la structure du mois antérieur le
+    // plus récent, plutôt que de forcer l'utilisateur à tout redéfinir (voir CLAUDE.md). Guard
+    // anti-course sur `period` : Répartition/Abonnements/Historique appellent tous
+    // loadEnvelopes(currentPeriod()) et peuvent se monter en parallèle au démarrage.
+    if (rows.length === 0 && !seedingPeriods.has(period)) {
+      seedingPeriods.add(period);
+      try {
+        await seedEnvelopesFromPreviousPeriod(couple.id, period);
+        const seeded = await supabase
+          .from('envelopes')
+          .select('id, parent_id, label, emoji, priority, allocation, enabled, funded_by, goal_target, goal_current')
+          .eq('couple_id', couple.id)
+          .eq('period', period)
+          .order('priority', { ascending: true });
+        if (seeded.error) throw seeded.error;
+        rows = seeded.data ?? [];
+      } finally {
+        seedingPeriods.delete(period);
+      }
+    }
+
     const byParent = new Map<string | null, typeof rows>();
     for (const row of rows) {
       const key = row.parent_id;
@@ -361,13 +390,18 @@ export const useStore = create<StoreState>((set, get) => ({
         funded_by: input.fundedBy,
         goal_target: input.goal?.target ?? null,
         goal_current: input.goal?.current ?? null,
+        period: input.period,
       })
       .select('id')
       .single();
     if (error) throw error;
 
-    await get().loadEnvelopes();
-    await syncPaydayActionsForEnvelope(data.id, input.fundedBy, input.label, input.emoji, get);
+    await get().loadEnvelopes(input.period);
+    // Une enveloppe créée pour un mois non courant ne doit jamais toucher payday_actions (le
+    // Payday Flow reste épinglé sur le vrai mois courant — voir CLAUDE.md).
+    if (input.period === currentPeriod()) {
+      await syncPaydayActionsForEnvelope(data.id, input.fundedBy, input.label, input.emoji, get);
+    }
   },
 
   updateEnvelope: async (id, input) => {
@@ -386,14 +420,18 @@ export const useStore = create<StoreState>((set, get) => ({
       .eq('id', id);
     if (error) throw error;
 
-    await get().loadEnvelopes();
-    await syncPaydayActionsForEnvelope(id, input.fundedBy, input.label, input.emoji, get);
+    await get().loadEnvelopes(input.period);
+    if (input.period === currentPeriod()) {
+      await syncPaydayActionsForEnvelope(id, input.fundedBy, input.label, input.emoji, get);
+    }
   },
 
-  deleteEnvelope: async (id) => {
+  deleteEnvelope: async (id, period) => {
     // Nettoie d'abord les actions payday liées (référence vivante — une action pointant vers
     // une enveloppe supprimée n'a plus de sens), sur un état payday_actions frais (l'utilisateur
-    // n'a peut-être jamais ouvert l'onglet Salaire cette session).
+    // n'a peut-être jamais ouvert l'onglet Salaire cette session). Inconditionnel (pas de gate
+    // sur `period`) : une action payday orpheline pointant vers une enveloppe d'un mois non
+    // courant est déjà périmée par construction, la nettoyer avec son enveloppe est correct.
     await get().loadPaydayActions();
     const linked = get().paydayActions.filter(
       (a) => a.amount.type === 'envelope' && a.amount.envelopeId === id
@@ -403,7 +441,7 @@ export const useStore = create<StoreState>((set, get) => ({
     const { error } = await supabase.from('envelopes').delete().eq('id', id);
     if (error) throw error;
 
-    await get().loadEnvelopes();
+    await get().loadEnvelopes(period);
     if (linked.length > 0) await get().loadPaydayActions();
     // subscriptions.envelope_id est "on delete set null" côté DB (voir supabase/migration.sql) —
     // recharge le cache local pour ne pas garder une référence périmée à l'enveloppe supprimée,
@@ -411,24 +449,24 @@ export const useStore = create<StoreState>((set, get) => ({
     await get().loadSubscriptions();
   },
 
-  setEnvelopeEnabled: async (id, enabled) => {
+  setEnvelopeEnabled: async (id, enabled, period) => {
     const { error } = await supabase.from('envelopes').update({ enabled }).eq('id', id);
     if (error) throw error;
 
-    await get().loadEnvelopes();
+    await get().loadEnvelopes(period);
   },
 
   // N'est appelé que quand l'enveloppe a déjà un objectif (goal !== null côté UI) — ne touche
   // jamais goal_target, donc la contrainte de cohérence DB (les deux nulles ou renseignées
   // ensemble) ne peut pas être violée par ce chemin.
-  updateEnvelopeGoalBalance: async (id, current) => {
+  updateEnvelopeGoalBalance: async (id, current, period) => {
     const { error } = await supabase.from('envelopes').update({ goal_current: current }).eq('id', id);
     if (error) throw error;
 
-    await get().loadEnvelopes();
+    await get().loadEnvelopes(period);
   },
 
-  reorderEnvelopeTo: async (id, targetIndex) => {
+  reorderEnvelopeTo: async (id, targetIndex, period) => {
     const { envelopes } = get();
     const siblings = findSiblings(envelopes, id);
     if (!siblings) return;
@@ -451,7 +489,7 @@ export const useStore = create<StoreState>((set, get) => ({
     const firstError = results.find((r) => r.error)?.error;
     if (firstError) throw firstError;
 
-    await get().loadEnvelopes();
+    await get().loadEnvelopes(period);
   },
 
   loadPaydayActions: async () => {
@@ -767,6 +805,66 @@ export const useStore = create<StoreState>((set, get) => ({
  * enveloppe avec son `fundedBy` actuel — crée/supprime des lignes selon les personnes
  * attendues, mais ne touche jamais au montant (toujours recalculé à l'affichage, jamais copié
  * ici). Appelée après chaque save d'enveloppe (create/update) dans useStore.ts. */
+// Cherche le mois antérieur le plus récent qui a des enveloppes et recrée toute sa structure
+// (récursive, tous niveaux) dans `period` avec de nouveaux id — jamais de partage d'id entre
+// mois, chaque mois reste ensuite indépendant et librement modifiable comme n'importe quel autre.
+async function seedEnvelopesFromPreviousPeriod(coupleId: string, period: string): Promise<void> {
+  const { data: prior, error: priorError } = await supabase
+    .from('envelopes')
+    .select('period')
+    .eq('couple_id', coupleId)
+    .lt('period', period)
+    .order('period', { ascending: false })
+    .limit(1);
+  if (priorError) throw priorError;
+  const sourcePeriod = prior?.[0]?.period as string | undefined;
+  if (!sourcePeriod) return;
+
+  const { data: sourceRows, error: sourceError } = await supabase
+    .from('envelopes')
+    .select('id, parent_id, label, emoji, priority, allocation, enabled, funded_by, goal_target, goal_current')
+    .eq('couple_id', coupleId)
+    .eq('period', sourcePeriod)
+    .order('priority', { ascending: true });
+  if (sourceError) throw sourceError;
+
+  const rows = sourceRows ?? [];
+  const byParent = new Map<string | null, typeof rows>();
+  for (const row of rows) {
+    const key = row.parent_id;
+    if (!byParent.has(key)) byParent.set(key, []);
+    byParent.get(key)!.push(row);
+  }
+
+  // Parent avant enfants (l'enfant a besoin du NOUVEL id généré par l'insert du parent) —
+  // volontairement séquentiel, contrairement aux Promise.all utilisés ailleurs dans ce fichier.
+  const insertLevel = async (sourceParentId: string | null, newParentId: string | null): Promise<void> => {
+    for (const row of byParent.get(sourceParentId) ?? []) {
+      const { data: inserted, error: insertError } = await supabase
+        .from('envelopes')
+        .insert({
+          couple_id: coupleId,
+          parent_id: newParentId,
+          label: row.label,
+          emoji: row.emoji,
+          priority: row.priority,
+          allocation: row.allocation,
+          enabled: row.enabled,
+          funded_by: row.funded_by,
+          goal_target: row.goal_target,
+          goal_current: row.goal_current,
+          period,
+        })
+        .select('id')
+        .single();
+      if (insertError) throw insertError;
+      await insertLevel(row.id, inserted.id);
+    }
+  };
+
+  await insertLevel(null, null);
+}
+
 async function syncPaydayActionsForEnvelope(
   envelopeId: string,
   fundedBy: 'A' | 'B' | 'both' | null,

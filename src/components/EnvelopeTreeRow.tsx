@@ -28,7 +28,7 @@ import { isGoalReached } from '@/core/waterfall/engine';
 import { summarizeChildren } from '@/core/waterfall/tree';
 import { formatAmount, formatAmountWithPct, formatPct } from '@/lib/format';
 import { confirmAction, notify } from '@/lib/alert';
-import { colors, ink } from '@/theme/colors';
+import { colors, ink, withOpacity } from '@/theme/colors';
 import { fonts } from '@/theme/typography';
 
 export interface PersonLabels {
@@ -219,6 +219,21 @@ export function SiblingEnvelopeList({
           />
         );
       })}
+    </View>
+  );
+}
+
+/** Titre de popup partagé par les 3 Modals (éditeur de montant, éditeur d'objectif, menu ⋯) —
+ * même badge emoji réduit que les lignes d'enveloppe, à l'échelle d'un titre de popup. */
+function ModalTitle({ envelope }: { envelope: Envelope }) {
+  return (
+    <View style={styles.modalTitleRow}>
+      <View style={styles.emojiBadgeSmall}>
+        <Text style={styles.emojiBadgeTextSmall}>{envelope.emoji}</Text>
+      </View>
+      <Text style={styles.modalTitle} numberOfLines={1}>
+        {envelope.label}
+      </Text>
     </View>
   );
 }
@@ -420,8 +435,11 @@ function EnvelopeTreeRowContainer({
                       <ChevronRight size={15} color={ink(0.4)} />
                     ))}
                 </View>
+                <View style={styles.emojiBadge}>
+                  <Text style={styles.emojiBadgeText}>{envelope.emoji}</Text>
+                </View>
                 <Text style={styles.label} numberOfLines={1}>
-                  {envelope.emoji} {envelope.label}
+                  {envelope.label}
                 </Text>
                 <Text style={styles.amount}>{formatAmount(amount)}</Text>
               </View>
@@ -485,9 +503,7 @@ function EnvelopeTreeRowContainer({
             <View style={styles.modalBackdrop}>
               <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeAmountEditor} />
               <View style={styles.modalCard}>
-                <Text style={styles.modalTitle} numberOfLines={1}>
-                  {envelope.emoji} {envelope.label}
-                </Text>
+                <ModalTitle envelope={envelope} />
                 <View style={styles.amountEditorField}>
                   <Text style={styles.amountEditorUnit}>€</Text>
                   <TextInput
@@ -527,9 +543,7 @@ function EnvelopeTreeRowContainer({
             <View style={styles.modalBackdrop}>
               <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeGoalBalanceEditor} />
               <View style={styles.modalCard}>
-                <Text style={styles.modalTitle} numberOfLines={1}>
-                  {envelope.emoji} {envelope.label}
-                </Text>
+                <ModalTitle envelope={envelope} />
                 <View style={styles.amountEditorField}>
                   <Text style={styles.amountEditorUnit}>€</Text>
                   <TextInput
@@ -558,9 +572,7 @@ function EnvelopeTreeRowContainer({
         <View style={styles.modalBackdrop}>
           <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeMenu} />
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle} numberOfLines={1}>
-              {envelope.emoji} {envelope.label}
-            </Text>
+            <ModalTitle envelope={envelope} />
             <TouchableOpacity style={styles.menuOption} onPress={handleToggleFromMenu}>
               <Power size={17} color={ink(0.6)} />
               <Text style={styles.menuOptionText}>{envelope.enabled ? 'Désactiver' : 'Activer'}</Text>
@@ -661,23 +673,32 @@ const styles = StyleSheet.create({
   textBlock: { flex: 1 },
   main: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   chevron: { width: 16, alignItems: 'center', justifyContent: 'center' },
-  label: { flex: 1, fontFamily: fonts.karlaBold, fontSize: 14, color: colors.ink, flexShrink: 1 },
-  amount: { fontFamily: fonts.spectralSemiBold, fontSize: 15, color: colors.ink },
+  emojiBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    backgroundColor: colors.primaryTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emojiBadgeText: { fontSize: 16 },
+  label: { flex: 1, fontFamily: fonts.bold, fontSize: 14, color: colors.ink, flexShrink: 1 },
+  amount: { fontFamily: fonts.semiBold, fontSize: 15, color: colors.ink },
   descriptionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginLeft: 22,
+    marginLeft: 60,
     marginTop: 2,
   },
-  description: { fontFamily: fonts.karlaMedium, fontSize: 11.5, color: ink(0.5), flexShrink: 1 },
-  pct: { fontFamily: fonts.karlaMedium, fontSize: 11.5, color: ink(0.5), marginLeft: 8 },
-  // Même marginLeft que descriptionRow (aligné sous le libellé, pas sous le chevron) — barre
-  // fine + texte compact, une seule ligne ajoutée par enveloppe avec objectif.
-  goalRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 22, marginTop: 4 },
+  description: { fontFamily: fonts.medium, fontSize: 11.5, color: ink(0.5), flexShrink: 1 },
+  pct: { fontFamily: fonts.medium, fontSize: 11.5, color: ink(0.5), marginLeft: 8 },
+  // Même marginLeft que descriptionRow (aligné sous le libellé, pas sous le chevron/badge) —
+  // barre fine + texte compact, une seule ligne ajoutée par enveloppe avec objectif.
+  goalRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 60, marginTop: 4 },
   goalBarTrack: { flex: 1, height: 5, borderRadius: 3, backgroundColor: colors.borderSubtle, overflow: 'hidden' },
   goalBarFill: { height: '100%', borderRadius: 3, backgroundColor: colors.primary },
-  goalText: { fontFamily: fonts.karlaMedium, fontSize: 11, color: ink(0.5) },
+  goalText: { fontFamily: fonts.medium, fontSize: 11, color: ink(0.5) },
   menuZone: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   // Pop-up centrée plutôt qu'éditeur inline : garde une taille de champ confortable quel que
   // soit le niveau d'imbrication (depth) de la ligne, et gère nativement le clavier (pas besoin
@@ -687,43 +708,53 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(20, 18, 15, 0.45)',
+    backgroundColor: withOpacity(colors.ink, 0.45),
     padding: 24,
   },
   modalCard: {
     width: '100%',
     maxWidth: 360,
-    borderRadius: 16,
+    borderRadius: 14,
     backgroundColor: colors.surface,
     padding: 18,
     gap: 12,
   },
-  modalTitle: { fontFamily: fonts.karlaBold, fontSize: 15, color: colors.ink, marginBottom: 2 },
+  modalTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 },
+  emojiBadgeSmall: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    backgroundColor: colors.primaryTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emojiBadgeTextSmall: { fontSize: 13 },
+  modalTitle: { flex: 1, fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
   menuOption: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
-  menuOptionText: { fontFamily: fonts.karlaSemiBold, fontSize: 14.5, color: colors.ink },
+  menuOptionText: { fontFamily: fonts.semiBold, fontSize: 14.5, color: colors.ink },
   menuOptionDanger: { color: colors.danger },
   amountEditorField: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  amountEditorUnit: { width: 18, fontFamily: fonts.karlaBold, fontSize: 14, color: ink(0.5) },
+  amountEditorUnit: { width: 18, fontFamily: fonts.bold, fontSize: 14, color: ink(0.5) },
   amountEditorInput: {
     flex: 1,
     borderWidth: 1.5,
     borderColor: colors.borderInput,
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: colors.section,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    fontFamily: fonts.spectralSemiBold,
+    fontFamily: fonts.semiBold,
     fontSize: 16,
     color: colors.ink,
   },
   amountEditorActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 20, marginTop: 4 },
-  amountEditorCancel: { fontFamily: fonts.karlaSemiBold, fontSize: 13.5, color: ink(0.5) },
-  amountEditorSave: { fontFamily: fonts.karlaBold, fontSize: 13.5, color: colors.primary },
+  amountEditorCancel: { fontFamily: fonts.semiBold, fontSize: 13.5, color: ink(0.5) },
+  amountEditorSave: { fontFamily: fonts.bold, fontSize: 13.5, color: colors.primary },
   summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 6 },
-  summary: { fontFamily: fonts.karlaBold, fontSize: 12.5, color: colors.warning },
+  summary: { fontFamily: fonts.bold, fontSize: 12.5, color: colors.warning },
   summaryOverflow: { color: colors.danger },
   addChild: { paddingVertical: 10 },
-  addChildText: { fontFamily: fonts.karlaBold, fontSize: 13, color: colors.primary },
+  addChildText: { fontFamily: fonts.bold, fontSize: 13, color: colors.primary },
   // Poignée de glisser dédiée : large (48px) pour rester facile à viser au pouce, mais limitée
   // à cette zone pour que le reste de la ligne (l'essentiel de l'écran) reste scrollable
   // normalement — voir le commentaire sur SiblingEnvelopeList plus haut.

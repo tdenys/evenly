@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { ArrowUpDown, Check, FlaskConical, X } from 'lucide-react-native';
+import { ArrowUpDown, Check, FlaskConical, Plus, X } from 'lucide-react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
@@ -12,7 +12,8 @@ import { applyAllocationOverrides, findEnvelope, findEnvelopeResult } from '@/co
 import type { Amount } from '@/core/waterfall/types';
 import { describeChildrenSummary, SiblingEnvelopeList } from '@/components/EnvelopeTreeRow';
 import SimulationEnvelopeRow from '@/components/SimulationEnvelopeRow';
-import { formatAmount, formatPct } from '@/lib/format';
+import PeriodNavigatorCard from '@/components/PeriodNavigatorCard';
+import { currentPeriod, formatAmount, formatPct } from '@/lib/format';
 import { errorMessage, notify } from '@/lib/alert';
 import { coupleIncome, coupleLabels } from '@/lib/couple';
 import { colors, ink } from '@/theme/colors';
@@ -23,6 +24,10 @@ type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'Waterfall'>,
   NativeStackScreenProps<RootStackParamList>
 >;
+
+// Boucle sur les enveloppes racines actives, dans l'ordre — dégradé de bleus (clair → accent),
+// repris tel quel de la maquette, pas une palette catégorielle par enveloppe.
+const PROPORTION_COLORS = ['#AFC6FB', '#7FA3F7', '#4E7DF3', colors.primary];
 
 export default function WaterfallScreen({ navigation }: Props) {
   const profile = useStore((s) => s.profile);
@@ -38,6 +43,10 @@ export default function WaterfallScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [dragging, setDragging] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
+  // Mois affiché sur Budget — chaque mois a son propre budget indépendant. N'affecte QUE cet
+  // écran : Répartition/Abonnements/Historique restent épinglés sur currentPeriod() quel que
+  // soit le mois navigué ici (voir CLAUDE.md).
+  const [selectedPeriod, setSelectedPeriod] = useState(() => currentPeriod());
   // Mode simulation ("et si") : jamais sauvegardé, purement local à l'écran — revenu simulé +
   // overrides d'allocation par enveloppe, rejoués sur une copie de l'arbre réel via
   // applyAllocationOverrides (voir plus bas). Mutuellement exclusif avec reorderMode : les deux
@@ -55,11 +64,17 @@ export default function WaterfallScreen({ navigation }: Props) {
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
-      Promise.all([loadEnvelopes(), refresh()])
+      Promise.all([loadEnvelopes(selectedPeriod), refresh()])
         .catch((err) => notify('Erreur', errorMessage(err)))
         .finally(() => setLoading(false));
-    }, [loadEnvelopes, refresh])
+    }, [loadEnvelopes, refresh, selectedPeriod])
   );
+
+  const handleChangePeriod = (period: string) => {
+    setSelectedPeriod(period);
+    setReorderMode(false);
+    setSimulationMode(false);
+  };
 
   const income = profile && partner ? coupleIncome(profile, partner) : { a: 0, b: 0 };
   const result = useMemo(
@@ -69,6 +84,20 @@ export default function WaterfallScreen({ navigation }: Props) {
 
   const getResult = (id: string) => findEnvelopeResult(result.envelopeResults, id);
   const summary = describeChildrenSummary(result.totalIncome, result.envelopeResults, 'non alloué');
+
+  // Répartition visuelle du revenu entre enveloppes racines actives — palette à 4 couleurs qui
+  // boucle (mêmes teintes que le reste de l'app, pas de couleur propre à chaque enveloppe).
+  const proportionSegments = useMemo(() => {
+    if (result.totalIncome <= 0) return [];
+    return envelopes
+      .filter((e) => e.enabled)
+      .map((e, i) => ({
+        id: e.id,
+        pct: ((findEnvelopeResult(result.envelopeResults, e.id)?.amount ?? 0) / result.totalIncome) * 100,
+        color: PROPORTION_COLORS[i % PROPORTION_COLORS.length],
+      }))
+      .filter((s) => s.pct > 0.5);
+  }, [envelopes, result]);
 
   // Toujours calculé (même hors simulation) pour que le toggle démarre avec les vrais revenus
   // pré-remplis — coût négligeable, ce sont les mêmes fonctions pures que le reste de l'écran.
@@ -112,11 +141,11 @@ export default function WaterfallScreen({ navigation }: Props) {
       : undefined;
 
   const handleReorder = (id: string, targetIndex: number) => {
-    reorderEnvelopeTo(id, targetIndex).catch((err) => notify('Erreur', errorMessage(err)));
+    reorderEnvelopeTo(id, targetIndex, selectedPeriod).catch((err) => notify('Erreur', errorMessage(err)));
   };
 
   const handleToggleEnabled = (id: string, enabled: boolean) => {
-    setEnvelopeEnabled(id, enabled).catch((err) => notify('Erreur', errorMessage(err)));
+    setEnvelopeEnabled(id, enabled, selectedPeriod).catch((err) => notify('Erreur', errorMessage(err)));
   };
 
   // Sauvegarde rapide depuis la pop-up €/% (tap sur le montant d'une ligne) — updateEnvelope
@@ -133,23 +162,44 @@ export default function WaterfallScreen({ navigation }: Props) {
       enabled: target.enabled,
       fundedBy: target.fundedBy,
       goal: target.goal,
+      period: selectedPeriod,
     }).catch((err) => notify('Erreur', errorMessage(err)));
   };
 
   // Suppression rapide depuis le menu ⋯ d'une ligne (confirmation déjà faite par l'appelant).
   const handleDeleteEnvelope = (id: string) => {
-    deleteEnvelope(id).catch((err) => notify('Erreur', errorMessage(err)));
+    deleteEnvelope(id, selectedPeriod).catch((err) => notify('Erreur', errorMessage(err)));
   };
 
   // Mise à jour rapide du solde d'objectif depuis le menu ⋯ (pop-up dédiée) — mutateur direct,
   // pas updateEnvelope complet (même précédent que handleToggleEnabled/setEnvelopeEnabled).
   const handleUpdateGoalBalance = (id: string, current: number) => {
-    updateEnvelopeGoalBalance(id, current).catch((err) => notify('Erreur', errorMessage(err)));
+    updateEnvelopeGoalBalance(id, current, selectedPeriod).catch((err) => notify('Erreur', errorMessage(err)));
   };
+
+  // Bouton "+" d'en-tête géré ici (pas dans RootNavigator.tsx) : il doit connaître
+  // selectedPeriod, ce qui n'est possible que depuis l'intérieur de cet écran.
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: ({ tintColor }: { tintColor?: string }) => (
+        <TouchableOpacity
+          onPress={() => navigation.navigate('EnvelopeForm', { period: selectedPeriod })}
+          hitSlop={8}
+          style={styles.headerAddButton}
+        >
+          <Plus size={16} color={tintColor ?? colors.primary} strokeWidth={2.5} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, selectedPeriod]);
 
   return (
     <View style={styles.container}>
       <View style={styles.inset}>
+        <PeriodNavigatorCard period={selectedPeriod} onChange={handleChangePeriod} />
+      </View>
+
+      <View style={[styles.inset, styles.incomeCard]}>
         <SummaryCard
           label="Revenu total du couple"
           amount={formatAmount(result.totalIncome)}
@@ -159,6 +209,14 @@ export default function WaterfallScreen({ navigation }: Props) {
           onPress={() => navigation.navigate('IncomeForm')}
         />
       </View>
+
+      {proportionSegments.length > 0 && (
+        <View style={[styles.inset, styles.proportionBar]}>
+          {proportionSegments.map((s) => (
+            <View key={s.id} style={{ width: `${s.pct}%`, backgroundColor: s.color }} />
+          ))}
+        </View>
+      )}
 
       <View style={[styles.inset, styles.reorderRow]}>
         {!simulationMode && (
@@ -246,8 +304,8 @@ export default function WaterfallScreen({ navigation }: Props) {
             getResult={getResult}
             personLabels={personLabels}
             onReorder={handleReorder}
-            onAddChild={(parentId) => navigation.navigate('EnvelopeForm', { parentId })}
-            onEdit={(envelopeId) => navigation.navigate('EnvelopeForm', { envelopeId })}
+            onAddChild={(parentId) => navigation.navigate('EnvelopeForm', { parentId, period: selectedPeriod })}
+            onEdit={(envelopeId) => navigation.navigate('EnvelopeForm', { envelopeId, period: selectedPeriod })}
             onToggleEnabled={handleToggleEnabled}
             onUpdateAllocation={handleUpdateAllocation}
             onUpdateGoalBalance={handleUpdateGoalBalance}
@@ -267,9 +325,37 @@ const styles = StyleSheet.create({
   // (pas de marge droite/gauche) — cette marge horizontale est donc appliquée au cas par cas aux
   // autres éléments (carte de résumé, boutons) plutôt qu'au conteneur entier.
   inset: { marginHorizontal: 16 },
-  reorderRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 16, marginTop: 14, marginBottom: 4 },
-  reorderButton: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  reorderToggle: { fontFamily: fonts.karlaBold, fontSize: 12.5, color: ink(0.5) },
+  headerAddButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginRight: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.section,
+  },
+  incomeCard: { marginTop: 16 },
+  proportionBar: {
+    marginTop: 16,
+    height: 9,
+    borderRadius: 5,
+    overflow: 'hidden',
+    flexDirection: 'row',
+    backgroundColor: colors.borderSubtle,
+  },
+  reorderRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 16, marginBottom: 4 },
+  reorderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 36,
+    paddingHorizontal: 13,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: colors.borderInput,
+    backgroundColor: colors.surface,
+  },
+  reorderToggle: { fontFamily: fonts.bold, fontSize: 12.5, color: ink(0.65) },
   reorderToggleActive: { color: colors.primary },
   simCard: {
     borderRadius: 14,
@@ -280,17 +366,17 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 10,
   },
-  simHint: { fontFamily: fonts.karlaMedium, fontSize: 11.5, color: ink(0.55), fontStyle: 'italic' },
+  simHint: { fontFamily: fonts.medium, fontSize: 11.5, color: ink(0.55), fontStyle: 'italic' },
   simIncomeRow: { flexDirection: 'row', gap: 10 },
   simIncomeField: { flex: 1, gap: 4 },
-  simIncomeLabel: { fontFamily: fonts.karlaSemiBold, fontSize: 12, color: ink(0.55) },
+  simIncomeLabel: { fontFamily: fonts.semiBold, fontSize: 12, color: ink(0.55) },
   simIncomeInput: {
     borderWidth: 1.5,
     borderColor: colors.borderInput,
     borderRadius: 10,
     backgroundColor: colors.surface,
     padding: 10,
-    fontFamily: fonts.spectralSemiBold,
+    fontFamily: fonts.semiBold,
     fontSize: 15,
     color: colors.ink,
   },
@@ -299,5 +385,5 @@ const styles = StyleSheet.create({
   // overscrollBehaviorY le désactive au niveau CSS (sans effet sur natif/Expo Go).
   scroll: Platform.OS === 'web' ? ({ overscrollBehaviorY: 'contain' } as object) : {},
   list: { flexGrow: 1, paddingBottom: 8 },
-  empty: { fontFamily: fonts.karlaMedium, textAlign: 'center', color: ink(0.4), marginTop: 32 },
+  empty: { fontFamily: fonts.medium, textAlign: 'center', color: ink(0.4), marginTop: 32 },
 });

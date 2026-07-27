@@ -1,22 +1,26 @@
-// Palette "Duo bicolore" — convertie précisément depuis les tokens oklch du design system
-// (calcul OKLab→sRGB, pas une estimation à l'oeil — voir le handoff design pour les valeurs
-// oklch d'origine).
+// Palette "Ardoise + Bleu" — importée depuis le projet Claude Design (App Redesign.dc.html) :
+// fond blanc, remplissages gris clair, encre ardoise, un unique accent bleu utilisé partout
+// (boutons, tab active, chips sélectionnées, carte calendrier) — plus de duo de couleurs par
+// personne ni de dégradé, contrairement à l'ancienne palette "Duo bicolore".
 
 export const colors = {
-  bg: '#F6F3EF', // Fond app
-  surface: '#FDFBF9', // Fond carte/élevé (écrans, inputs remplis)
-  section: '#F6F4F1', // Fond section (regroupements de champs de formulaire)
-  borderSubtle: '#E3E1DD', // Séparateurs de lignes, bordures de header/tabbar
-  borderInput: '#DAD7D2', // Bordure des champs de saisie, chips non sélectionnées
-  ink: '#27241F', // Texte principal
-  primary: '#4D473C', // Boutons pleins neutres, tab active, switch "on"
-  accentA: '#A55795', // Personne A (stable, pas "moi")
-  accentB: '#008F64', // Personne B (stable, pas "partenaire")
-  danger: '#C92F33', // Dépassements, bouton Supprimer
-  warning: '#CF6F19', // Montants non alloués
+  bg: '#FFFFFF', // Fond app
+  surface: '#FFFFFF', // Fond carte/élevé (écrans, inputs remplis)
+  section: '#F5F6F8', // Fond section (regroupements de champs de formulaire, cartes de résumé)
+  borderSubtle: '#F2F3F6', // Séparateurs de lignes (hairline), plus clair que borderInput
+  borderInput: '#ECEFF3', // Bordure des cartes/champs de saisie/pastilles non sélectionnées
+  ink: '#0F172A', // Texte principal
+  primary: '#3559E9', // Accent unique : boutons pleins, tab active, switch "on", liens
+  primaryTint: '#EAF0FE', // Tinte de l'accent : badges emoji, fond de carte "hero"
+  secondary: '#475569', // Texte secondaire
+  tertiary: '#94A3B8', // Texte tertiaire, icônes de tab inactives
+  disabled: '#CBD5E1', // Icônes/éléments désactivés très clairs
+  danger: '#EF4444', // Dépassements, bouton Supprimer
+  warning: '#F59E0B', // Montants non alloués
 } as const;
 
-/** Encre à une opacité donnée (0-1) — l'ancre de la hiérarchie de texte secondaire/tertiaire. */
+/** Encre à une opacité donnée (0-1) — pour les opacités ponctuelles qui ne correspondent à
+ * aucun token flat (secondary/tertiary/disabled couvrent les rôles de texte les plus courants). */
 export function ink(alpha: number): string {
   return withOpacity(colors.ink, alpha);
 }
@@ -28,6 +32,3 @@ export function withOpacity(hex: string, alpha: number): string {
   const b = parseInt(hex.slice(5, 7), 16);
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
-
-/** Dégradé 135° Accent A → Accent B, pour les éléments "Les deux" (expo-linear-gradient). */
-export const personGradient: [string, string] = [colors.accentA, colors.accentB];

@@ -21,15 +21,20 @@ export default function SectionCard({ label, children }: Props) {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
+    borderRadius: 14,
     backgroundColor: colors.section,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
+    borderColor: colors.borderInput,
     padding: 14,
     gap: 12,
+    shadowColor: colors.ink,
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 2,
   },
   label: {
-    fontFamily: fonts.karlaBold,
+    fontFamily: fonts.bold,
     fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 0.4,

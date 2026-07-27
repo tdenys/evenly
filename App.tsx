@@ -4,17 +4,12 @@ import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
 import { useFonts } from 'expo-font';
 import {
-  Spectral_500Medium,
-  Spectral_600SemiBold,
-  Spectral_700Bold,
-} from '@expo-google-fonts/spectral';
-import {
-  Karla_400Regular,
-  Karla_500Medium,
-  Karla_600SemiBold,
-  Karla_700Bold,
-  Karla_800ExtraBold,
-} from '@expo-google-fonts/karla';
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  Inter_800ExtraBold,
+} from '@expo-google-fonts/inter';
 import { RootNavigator, navigationRef } from '@/navigation/RootNavigator';
 import LoadingScreen from '@/components/ui/LoadingScreen';
 import { checkAndApplyUpdate } from '@/lib/updates';
@@ -34,14 +29,11 @@ if (Platform.OS !== 'web') {
 
 export default function App() {
   const [fontsLoaded] = useFonts({
-    Spectral_500Medium,
-    Spectral_600SemiBold,
-    Spectral_700Bold,
-    Karla_400Regular,
-    Karla_500Medium,
-    Karla_600SemiBold,
-    Karla_700Bold,
-    Karla_800ExtraBold,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+    Inter_800ExtraBold,
   });
 
   // Vérifie et applique une éventuelle mise à jour OTA dès le lancement — au lieu du

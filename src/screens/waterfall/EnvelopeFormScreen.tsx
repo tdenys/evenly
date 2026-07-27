@@ -31,7 +31,7 @@ export default function EnvelopeFormScreen({ route, navigation }: Props) {
 
   const personLabels = coupleLabels(profile, partner);
 
-  const { envelopeId, parentId } = route.params;
+  const { envelopeId, parentId, period } = route.params;
   const existing = envelopeId ? findEnvelope(envelopes, envelopeId) : undefined;
   // Priorité par défaut calculée parmi les enveloppes sœurs (enfants du même parent, ou
   // enveloppes racines si parentId est absent) — pas parmi toutes les enveloppes de l'arbre —
@@ -90,6 +90,7 @@ export default function EnvelopeFormScreen({ route, navigation }: Props) {
         enabled,
         fundedBy,
         goal: goalEnabled ? { target: targetValue, current: Number.isNaN(currentValue) ? 0 : currentValue } : null,
+        period,
       };
       if (existing) {
         await updateEnvelope(existing.id, input);
@@ -115,7 +116,7 @@ export default function EnvelopeFormScreen({ route, navigation }: Props) {
     if (!existing) return;
     confirmAction('Supprimer l\'enveloppe', `Supprimer "${existing.label}" ?`, async () => {
       try {
-        await deleteEnvelope(existing.id);
+        await deleteEnvelope(existing.id, period);
         navigation.goBack();
       } catch (err) {
         notify('Erreur', errorMessage(err));
@@ -217,7 +218,6 @@ export default function EnvelopeFormScreen({ route, navigation }: Props) {
               label={chipLabel}
               selected={fundedBy === value}
               onPress={() => setFundedBy(value)}
-              gradient={value === 'both'}
             />
           ))}
         </ChipRow>
@@ -231,14 +231,14 @@ export default function EnvelopeFormScreen({ route, navigation }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: 16, gap: 14, paddingBottom: 48 },
-  headerAction: { fontFamily: fonts.karlaSemiBold, fontSize: 14.5, color: ink(0.55), paddingHorizontal: 4 },
-  headerActionPrimary: { color: colors.primary, fontFamily: fonts.karlaBold },
+  headerAction: { fontFamily: fonts.semiBold, fontSize: 14.5, color: ink(0.55), paddingHorizontal: 4 },
+  headerActionPrimary: { color: colors.primary, fontFamily: fonts.bold },
   headerActionDisabled: { opacity: 0.5 },
   emojiLabelRow: { flexDirection: 'row', gap: 10 },
   emojiInput: {
     borderWidth: 1.5,
     borderColor: colors.borderInput,
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: colors.surface,
     padding: 12,
     fontSize: 22,
@@ -249,16 +249,16 @@ const styles = StyleSheet.create({
   input: {
     borderWidth: 1.5,
     borderColor: colors.borderInput,
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: colors.surface,
     padding: 12,
-    fontFamily: fonts.karlaMedium,
+    fontFamily: fonts.medium,
     fontSize: 15,
     color: colors.ink,
   },
   fieldRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   fieldLabel: { ...type.fieldLabel, color: ink(0.6), flexShrink: 1 },
-  availableHint: { fontFamily: fonts.karlaSemiBold, fontSize: 12.5, color: colors.warning },
+  availableHint: { fontFamily: fonts.semiBold, fontSize: 12.5, color: colors.warning },
   fillButton: {
     borderWidth: 1.5,
     borderColor: colors.primary,
@@ -267,5 +267,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     alignSelf: 'flex-start',
   },
-  fillButtonText: { fontFamily: fonts.karlaBold, fontSize: 12.5, color: colors.primary },
+  fillButtonText: { fontFamily: fonts.bold, fontSize: 12.5, color: colors.primary },
 });

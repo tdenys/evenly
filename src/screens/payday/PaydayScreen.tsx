@@ -13,7 +13,7 @@ import { resolveOwnerActions } from '@/core/payday/fromEnvelope';
 import { describeReminderBody } from '@/core/payday/reminderMessage';
 import { runWaterfall } from '@/core/waterfall/engine';
 import { coupleIncome, incomeShare } from '@/lib/couple';
-import { formatAmount, formatAmountWithPct } from '@/lib/format';
+import { currentPeriod, formatAmount, formatAmountWithPct } from '@/lib/format';
 import { errorMessage, notify } from '@/lib/alert';
 import {
   cancelPaydayReminder,
@@ -87,7 +87,7 @@ export default function PaydayScreen({ navigation }: Props) {
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
-      Promise.all([loadEnvelopes(), loadPaydayActions(), loadAccounts(), loadPaydayChecks(), refresh()])
+      Promise.all([loadEnvelopes(currentPeriod()), loadPaydayActions(), loadAccounts(), loadPaydayChecks(), refresh()])
         .catch((err) => notify('Erreur', errorMessage(err)))
         .finally(() => setLoading(false));
     }, [loadEnvelopes, loadPaydayActions, loadAccounts, loadPaydayChecks, refresh])
@@ -528,22 +528,22 @@ const styles = StyleSheet.create({
   },
   pill: { flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
   pillSelected: { backgroundColor: colors.primary },
-  pillText: { fontFamily: fonts.karlaSemiBold, fontSize: 12.5, color: ink(0.55) },
-  pillTextSelected: { color: '#fff', fontFamily: fonts.karlaBold },
+  pillText: { fontFamily: fonts.semiBold, fontSize: 12.5, color: ink(0.55) },
+  pillTextSelected: { color: '#fff', fontFamily: fonts.bold },
   // Repliée par défaut (juste un résumé + chevron) — la config du jour de versement se consulte
   // rarement, elle ne doit pas peser visuellement au milieu de l'écran comme avant.
-  dayCard: { borderRadius: 12, backgroundColor: colors.section },
+  dayCard: { borderRadius: 14, backgroundColor: colors.section },
   dayHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 12 },
-  daySummary: { flex: 1, fontFamily: fonts.karlaSemiBold, fontSize: 12.5, color: ink(0.55) },
+  daySummary: { flex: 1, fontFamily: fonts.semiBold, fontSize: 12.5, color: ink(0.55) },
   dayContent: { paddingHorizontal: 12, paddingBottom: 12, gap: 12 },
   fieldRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  fieldLabel: { fontFamily: fonts.karlaSemiBold, fontSize: 12.5, color: ink(0.6) },
+  fieldLabel: { fontFamily: fonts.semiBold, fontSize: 12.5, color: ink(0.6) },
   stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   bellButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  remaining: { fontFamily: fonts.karlaSemiBold, fontSize: 12.5, color: colors.warning },
-  overflow: { fontFamily: fonts.karlaBold, fontSize: 12.5, color: colors.danger },
-  empty: { fontFamily: fonts.karlaMedium, textAlign: 'center', color: ink(0.4), marginTop: 32 },
+  remaining: { fontFamily: fonts.semiBold, fontSize: 12.5, color: colors.warning },
+  overflow: { fontFamily: fonts.bold, fontSize: 12.5, color: colors.danger },
+  empty: { fontFamily: fonts.medium, textAlign: 'center', color: ink(0.4), marginTop: 32 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -554,16 +554,16 @@ const styles = StyleSheet.create({
   },
   checkZone: { width: 32, height: 44, alignItems: 'center', justifyContent: 'center' },
   rowText: { flex: 1 },
-  rowLabel: { fontFamily: fonts.karlaBold, fontSize: 14, color: colors.ink },
-  rowDescription: { fontFamily: fonts.karlaMedium, fontSize: 11.5, color: ink(0.5), marginTop: 2 },
-  rowNote: { fontFamily: fonts.karlaMedium, fontSize: 11.5, color: ink(0.55), fontStyle: 'italic', marginTop: 2 },
+  rowLabel: { fontFamily: fonts.bold, fontSize: 14, color: colors.ink },
+  rowDescription: { fontFamily: fonts.medium, fontSize: 11.5, color: ink(0.5), marginTop: 2 },
+  rowNote: { fontFamily: fonts.medium, fontSize: 11.5, color: ink(0.55), fontStyle: 'italic', marginTop: 2 },
   amountInput: {
     borderWidth: 1.5,
     borderColor: colors.borderInput,
     borderRadius: 10,
     backgroundColor: colors.surface,
     padding: 8,
-    fontFamily: fonts.spectralSemiBold,
+    fontFamily: fonts.semiBold,
     fontSize: 15,
     width: 90,
     textAlign: 'right',
@@ -571,6 +571,6 @@ const styles = StyleSheet.create({
   },
   // Montant dérivé d'une enveloppe : pas de bordure de champ de saisie, pour signaler
   // visuellement que ce n'est pas éditable ici (ça se change depuis l'écran Budget).
-  amountReadOnly: { fontFamily: fonts.spectralSemiBold, fontSize: 15, width: 90, textAlign: 'right', color: colors.ink },
+  amountReadOnly: { fontFamily: fonts.semiBold, fontSize: 15, width: 90, textAlign: 'right', color: colors.ink },
   editZone: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
 });

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import type { Amount } from '@/core/waterfall/types';
+import { colors } from '@/theme/colors';
+import { fonts } from '@/theme/typography';
 
 interface Props {
   value: Amount;
@@ -122,19 +124,20 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: colors.borderInput,
     borderRadius: 20,
     paddingVertical: 8,
     paddingHorizontal: 14,
   },
-  chipSelected: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
-  chipText: { color: '#333' },
-  chipTextSelected: { color: '#fff', fontWeight: '600' },
+  chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { fontFamily: fonts.medium, color: colors.secondary },
+  chipTextSelected: { fontFamily: fonts.semiBold, color: '#fff' },
   input: {
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
+    borderColor: colors.borderInput,
+    borderRadius: 10,
     padding: 12,
+    fontFamily: fonts.semiBold,
     fontSize: 16,
   },
 });

@@ -57,7 +57,7 @@ export default function Button({
 const styles = StyleSheet.create({
   base: {
     height: 52,
-    borderRadius: 14,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -65,8 +65,8 @@ const styles = StyleSheet.create({
   },
   compact: { height: 44 },
   disabled: { opacity: 0.5 },
-  label: { fontFamily: fonts.karlaBold, fontSize: 14.5 },
+  label: { fontFamily: fonts.bold, fontSize: 14.5 },
   textDanger: { paddingVertical: 10, alignItems: 'center' },
-  textDangerLabel: { fontFamily: fonts.karlaBold, fontSize: 13.5, color: colors.danger },
+  textDangerLabel: { fontFamily: fonts.bold, fontSize: 13.5, color: colors.danger },
   disabledText: { opacity: 0.5 },
 });
