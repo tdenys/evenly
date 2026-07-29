@@ -7,7 +7,18 @@ import {
 } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { ChartLine, Clock, House, Plus, SquareStack, User, type LucideIcon } from 'lucide-react-native';
+import {
+  ArrowLeftRight,
+  Bell,
+  ChartColumn,
+  Clock,
+  House,
+  Menu,
+  Plus,
+  RefreshCw,
+  User,
+  type LucideIcon,
+} from 'lucide-react-native';
 import { useStore } from '@/store/useStore';
 import { colors } from '@/theme/colors';
 import { fonts } from '@/theme/typography';
@@ -25,33 +36,36 @@ import SubscriptionsScreen from '@/screens/subscriptions/SubscriptionsScreen';
 import SubscriptionFormScreen from '@/screens/subscriptions/SubscriptionFormScreen';
 import HistoryScreen from '@/screens/history/HistoryScreen';
 import SettingsScreen from '@/screens/settings/SettingsScreen';
+import HomeScreen from '@/screens/home/HomeScreen';
 
 export type AuthStackParamList = {
   Login: undefined;
   SignUp: undefined;
 };
 
-// Les 5 sections principales, désormais des onglets persistants plutôt qu'une pile classique.
-// Revenus n'est plus un onglet à part : c'est un modal atteint depuis la carte "Revenu total du
-// couple" sur Budget (voir IncomeForm ci-dessous) — les revenus se modifient rarement, contrairement
-// aux onglets "contenu qu'on consulte". Paramètres reste le dernier onglet, réservé au réglages de
-// compte (prénoms, comptes, mises à jour), volontairement placé tout à droite.
+// Accueil (tableau de bord) prend la place laissée vacante par Paramètres, qui passe derrière
+// l'avatar d'en-tête plutôt que d'occuper un 6e onglet — la tab bar reste à 5 entrées, la limite
+// haute raisonnable en mobile. Revenus n'est pas un onglet à part : c'est un modal atteint depuis
+// la carte "Revenu total du couple" sur Budget (voir IncomeForm ci-dessous) — les revenus se
+// modifient rarement, contrairement aux onglets "contenu qu'on consulte".
 export type MainTabParamList = {
+  Home: undefined;
   Waterfall: undefined;
   Payday: undefined;
   Subscriptions: undefined;
   History: undefined;
-  Settings: undefined;
 };
 
 // Les formulaires (et les onglets eux-mêmes) vivent au niveau racine — les formulaires
-// s'affichent en modale par-dessus la tab bar, pas comme un 5e onglet.
+// s'affichent en modale par-dessus la tab bar, pas comme un onglet en plus. Paramètres suit le
+// même principe : atteint depuis l'avatar d'Accueil, pas depuis la tab bar.
 export type RootStackParamList = {
   Tabs: NavigatorScreenParams<MainTabParamList> | undefined;
   EnvelopeForm: { envelopeId?: string; parentId?: string; period: string };
   IncomeForm: undefined;
   PaydayActionForm: { actionId?: string; ownerId: string };
   SubscriptionForm: { subscriptionId?: string };
+  Settings: undefined;
 };
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -74,18 +88,18 @@ function AuthNavigator() {
 }
 
 const TAB_ICONS: Record<keyof MainTabParamList, LucideIcon> = {
-  Waterfall: House,
-  Payday: Clock,
-  Subscriptions: SquareStack,
-  History: ChartLine,
-  Settings: User,
+  Home: House,
+  Waterfall: ChartColumn,
+  Payday: ArrowLeftRight,
+  Subscriptions: RefreshCw,
+  History: Clock,
 };
 const TAB_LABELS: Record<keyof MainTabParamList, string> = {
+  Home: 'Accueil',
   Waterfall: 'Budget',
   Payday: 'Répartition',
   Subscriptions: 'Abonnements',
   History: 'Historique',
-  Settings: 'Paramètres',
 };
 
 function tabIcon(route: keyof MainTabParamList) {
@@ -112,6 +126,35 @@ function HeaderTitleWithMark({ children }: { children?: string }) {
   );
 }
 
+// En-tête propre à Accueil (pas le pattern "carré + titre" partagé par les 4 autres onglets) :
+// menu (décoratif, pas de tiroir de navigation dans l'app), nom "Evenly", cloche (décorative,
+// pas de centre de notifications aujourd'hui) et avatar — seul élément réellement interactif,
+// vers Paramètres (voir RootStack.Screen "Settings").
+function HomeHeaderLeft() {
+  return (
+    <View style={[headerStyles.badge, headerStyles.homeSideMargin]}>
+      <Menu size={16} color={colors.primary} />
+    </View>
+  );
+}
+
+function HomeHeaderTitle() {
+  return <Text style={headerStyles.homeTitleText}>Evenly</Text>;
+}
+
+function HomeHeaderRight({ onPressAvatar }: { onPressAvatar: () => void }) {
+  return (
+    <View style={[headerStyles.homeRightRow, headerStyles.homeSideMargin]}>
+      <View style={headerStyles.badge}>
+        <Bell size={16} color={colors.primary} />
+      </View>
+      <TouchableOpacity style={headerStyles.avatar} onPress={onPressAvatar} hitSlop={8}>
+        <User size={16} color="#fff" />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 const headerStyles = StyleSheet.create({
   addButton: {
     width: 28,
@@ -125,6 +168,25 @@ const headerStyles = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   mark: { width: 18, height: 18, borderRadius: 5, backgroundColor: colors.ink },
   titleText: { fontFamily: fonts.bold, fontSize: 16.5, color: colors.ink },
+  homeSideMargin: { marginHorizontal: 16 },
+  homeRightRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  badge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.section,
+  },
+  avatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+  },
+  homeTitleText: { fontFamily: fonts.extraBold, fontSize: 17, color: colors.ink },
 });
 
 function MainTabs() {
@@ -141,6 +203,17 @@ function MainTabs() {
         headerTitle: ({ children }) => <HeaderTitleWithMark>{children}</HeaderTitleWithMark>,
       }}
     >
+      <Tab.Screen
+        name="Home"
+        component={HomeScreen}
+        options={{
+          tabBarLabel: TAB_LABELS.Home,
+          tabBarIcon: tabIcon('Home'),
+          headerTitle: () => <HomeHeaderTitle />,
+          headerLeft: () => <HomeHeaderLeft />,
+          headerRight: () => <HomeHeaderRight onPressAvatar={() => navigationRef.navigate('Settings')} />,
+        }}
+      />
       <Tab.Screen
         name="Waterfall"
         component={WaterfallScreen}
@@ -183,15 +256,6 @@ function MainTabs() {
           tabBarIcon: tabIcon('History'),
         }}
       />
-      <Tab.Screen
-        name="Settings"
-        component={SettingsScreen}
-        options={{
-          title: TAB_LABELS.Settings,
-          tabBarLabel: TAB_LABELS.Settings,
-          tabBarIcon: tabIcon('Settings'),
-        }}
-      />
     </Tab.Navigator>
   );
 }
@@ -219,6 +283,11 @@ function RootNavigatorStack() {
         name="SubscriptionForm"
         component={SubscriptionFormScreen}
         options={{ presentation: 'modal', headerShown: true, title: 'Abonnement' }}
+      />
+      <RootStack.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{ presentation: 'modal', headerShown: true, title: 'Paramètres' }}
       />
     </RootStack.Navigator>
   );

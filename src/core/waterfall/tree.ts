@@ -29,6 +29,16 @@ export function findFundedEnvelopes(envelopes: Envelope[]): Envelope[] {
   ]);
 }
 
+/** Liste plate de toutes les enveloppes de l'arbre (à n'importe quel niveau) ayant un objectif
+ * actif (`goal !== null`) — sert à l'écran Accueil pour retrouver l'objectif le plus proche
+ * d'être atteint, tous niveaux confondus (racine ou sous-enveloppe). */
+export function findEnvelopesWithGoal(envelopes: Envelope[]): Envelope[] {
+  return envelopes.flatMap((envelope) => [
+    ...(envelope.goal !== null ? [envelope] : []),
+    ...findEnvelopesWithGoal(envelope.children),
+  ]);
+}
+
 export interface FlatEnvelope {
   id: string;
   label: string;
