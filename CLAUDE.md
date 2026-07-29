@@ -90,15 +90,20 @@ src/
 │   └── updates.ts                   → checkAndApplyUpdate() (EAS Update au lancement)
 │
 ├── theme/
-│   ├── colors.ts                    → palette + ink()/withOpacity() (opacité sur l'encre de base)
-│   └── typography.ts                 → familles de polices (Karla/Spectral) + styles de texte partagés
+│   ├── colors.ts                    → palette "Ardoise + Bleu" (accent unique) + ink()/withOpacity()
+│   └── typography.ts                 → police unique Inter (clés neutres regular/medium/semiBold/
+│                                        bold/extraBold, pas de nom de famille dans les clés)
 │
 ├── components/
 │   ├── ui/                          → primitives partagées (Button, Chip/ChipRow, SectionCard,
-│   │                                   SummaryCard, Stepper, AppSwitch, LoadingScreen)
-│   ├── EnvelopeTreeRow.tsx            → rendu INTERACTIF de l'arbre d'enveloppes (drag, menu ⋯, édition)
+│   │                                   SummaryCard, Stepper, AppSwitch, LoadingScreen, ProgressRing)
+│   ├── EnvelopeTreeRow.tsx            → rendu INTERACTIF de l'arbre d'enveloppes (drag, menu ⋯, édition,
+│   │                                     barre de progression d'objectif, badge emoji teinté)
 │   ├── HistoryEnvelopeRow.tsx          → rendu LECTURE SEULE d'un EnvelopeSnapshot (pas le même composant,
 │   │                                     volontairement — pas de logique interactive à neutraliser)
+│   ├── SimulationEnvelopeRow.tsx        → rendu du mode simulation ("et si"), lecture + édition locale
+│   │                                     d'allocations sans jamais toucher aux enveloppes réelles
+│   ├── PeriodNavigatorCard.tsx          → carte calendrier (navigation mois/année) de l'onglet Budget
 │   ├── AmountEditor.tsx                → popup €/% pour Amount (Waterfall)
 │   └── PaydayAmountEditor.tsx          → équivalent pour PaydayAmount
 │
@@ -111,12 +116,14 @@ src/
 └── screens/
     ├── auth/                        → LoginScreen, SignUpScreen
     ├── onboarding/                  → CreateOrJoinCoupleScreen, WaitingForPartnerScreen
+    ├── home/                        → HomeScreen (onglet "Accueil" : tableau de bord, voir plus bas)
     ├── waterfall/                   → WaterfallScreen (onglet "Budget"), EnvelopeFormScreen (modal),
     │                                    IncomeFormScreen (modal, atteint depuis la carte revenu)
     ├── payday/                      → PaydayScreen (onglet "Répartition"), PaydayActionFormScreen (modal)
     ├── subscriptions/               → SubscriptionsScreen (onglet "Abonnements"), SubscriptionFormScreen (modal)
     ├── history/                     → HistoryScreen (onglet "Historique") — pas de modal, tout est inline
-    └── settings/                    → SettingsScreen (onglet "Paramètres" : prénoms, comptes, mises à jour)
+    └── settings/                    → SettingsScreen (modal racine "Paramètres" : prénoms, comptes, mises
+                                         à jour — atteint depuis l'avatar d'Accueil, pas un onglet)
 ```
 
 **Principe fondamental inchangé** : tout `src/core/*` est du TypeScript pur — seulement des
@@ -126,16 +133,34 @@ uniquement à la couche store** (ex: `PaydayActionRow = PaydayAction & { ownerId
 jamais dans le type pur du domaine — c'est le principe à reproduire pour toute nouvelle relation
 inter-domaines.
 
+**Second principe, pour toute notion de "mois/période"** : `period` (format `'YYYY-MM-01'`,
+voir `currentPeriod()`/`shiftPeriod()` dans `src/lib/format.ts`) n'est ajouté **ni au type pur
+`Envelope`, ni bolted-on à un type store** — contrairement au principe FK ci-dessus. `period` est
+uniforme sur tout l'arbre chargé par un même appel (`loadEnvelopes(period)`), pas une valeur qui
+varie ligne par ligne comme `ownerId`/`accountId` : c'est donc l'appelant (l'écran, via un
+paramètre de fonction) qui porte cette info, jamais un nœud de l'arbre ni un champ lu depuis le
+store après un `await` (éviterait une course si l'utilisateur change de mois pendant une requête
+en vol). Voir "Le Waterfall daté" plus bas.
+
 ---
 
 ## Navigation actuelle (5 onglets)
 
-`Budget` (Waterfall) · `Répartition` (Payday) · `Abonnements` (Subscriptions) · `Historique`
-(History) · `Paramètres` (Settings) — bottom-tabs persistants. Les formulaires de création/édition
-(`EnvelopeForm`, `IncomeForm`, `PaydayActionForm`, `SubscriptionForm`) vivent au niveau racine en
-tant que modales par-dessus la tab bar, pas comme des écrans d'onglet. Un onglet qui n'a pas de
-flux de création dédié (comme Historique, où "clôturer" est un simple bouton dans l'écran) n'a
-besoin d'aucune entrée dans `RootStackParamList`.
+`Accueil` (Home) · `Budget` (Waterfall) · `Répartition` (Payday) · `Abonnements` (Subscriptions) ·
+`Historique` (History) — bottom-tabs persistants. **Paramètres n'est plus un onglet** : il vit au
+niveau racine comme une modale (`RootStackParamList.Settings`), atteinte uniquement depuis
+l'avatar en haut à droite de l'en-tête d'Accueil — la tab bar reste volontairement à 5 entrées
+(la limite haute raisonnable en mobile) plutôt que d'en ajouter une 6ᵉ pour Accueil. Les autres
+formulaires de création/édition (`EnvelopeForm`, `IncomeForm`, `PaydayActionForm`,
+`SubscriptionForm`) suivent le même principe : niveau racine, modales par-dessus la tab bar,
+jamais des écrans d'onglet. Un onglet qui n'a pas de flux de création dédié (comme Historique, où
+"clôturer" est un simple bouton dans l'écran) n'a besoin d'aucune entrée dans `RootStackParamList`.
+
+L'en-tête d'Accueil est le seul à déroger au pattern partagé "carré sombre + titre" des 4 autres
+onglets (voir `HeaderTitleWithMark` dans `RootNavigator.tsx`) : il affiche à la place un menu
+(décoratif, l'app n'a pas de tiroir de navigation), le nom "Evenly", une cloche (décorative,
+pas de centre de notifications aujourd'hui — seul le rappel local de jour de versement existe) et
+l'avatar cliquable vers Paramètres.
 
 ---
 
@@ -205,6 +230,11 @@ type Amount =
   | { type: "percent_remaining"; pct: number }  // % de ce qu'il reste au moment de l'évaluation
   | { type: "prorata_income"; who: "A" | "B" }  // part de ce qu'il reste proportionnelle au revenu de A ou B
 
+interface EnvelopeGoal {
+  target: number
+  current: number         // saisi à la main, pas de connexion bancaire (voir "Objectifs" plus bas)
+}
+
 interface Envelope {
   id: string
   label: string
@@ -213,9 +243,13 @@ interface Envelope {
   allocation: Amount
   enabled: boolean
   fundedBy: "A" | "B" | "both" | null
+  goal: EnvelopeGoal | null   // null = pas d'objectif ; voir isGoalReached() dans engine.ts
   children: Envelope[]    // sous-enveloppes, même forme, récursif
 }
 ```
+
+**Pas de champ `period` ici** — voir le second principe fondamental plus haut : le mois/année
+d'un arbre d'enveloppes est porté par l'appelant (`loadEnvelopes(period)`), jamais par le type.
 
 `Rule`, `Recipient` et `Condition` (destination de l'argent + conditions type
 `skip_if_goal_reached`/`skip_if_pot_above`/`active_from_date`) restent définis dans
@@ -223,6 +257,62 @@ interface Envelope {
 d'une enveloppe se fait via `children`, pas via des règles avec destination. Ces types sont
 conservés au cas où un besoin de "verser vers X, sauf si Y" refasse surface plus tard — mais
 tant que rien ne les utilise, ne pas les câbler dans l'UI ou le moteur.
+
+---
+
+## Le Waterfall daté (mois/année)
+
+Depuis l'onglet Budget, on navigue entre mois/année (carte `PeriodNavigatorCard.tsx`) — **chaque
+mois a son propre arbre d'enveloppes indépendant et éditable** (colonne `envelopes.period`, date
+`'YYYY-MM-01'`), pas juste une vue historique en lecture seule. Décisions structurantes :
+
+- **Seul l'onglet Budget connaît la notion de date.** Répartition, Abonnements et Historique
+  restent épinglés sur le vrai mois calendaire courant (`currentPeriod()`), quel que soit le mois
+  navigué sur Budget — chacun de ces 3 écrans appelle `loadEnvelopes(currentPeriod())` dans son
+  `useFocusEffect`, jamais un `period` variable.
+- **Un mois vide hérite automatiquement de la structure du mois antérieur le plus récent** (voir
+  `loadEnvelopes` dans `useStore.ts`) : enveloppes, sous-enveloppes, allocations et objectifs sont
+  dupliqués avec de nouveaux id — pas de partage d'id entre mois, chaque mois reste ensuite
+  indépendant. Un mois passé antérieur à toute donnée existante reste vide (rien à copier). Un
+  garde anti-course (`seedingPeriods`, module-privé) évite une double-duplication si plusieurs
+  écrans chargent le même mois vide en parallèle au démarrage.
+- **Limite assumée** : les actions Payday liées à une enveloppe (`amount.type === 'envelope'`) et
+  les abonnements liés (`envelopeId`) pointent vers l'id exact d'une ligne d'enveloppe précise. Au
+  changement de mois calendaire réel, ces liens existants pointent vers l'enveloppe de l'ancien
+  mois — Répartition/Abonnements affichent alors "Enveloppe supprimée" jusqu'à ce que
+  l'utilisateur relie manuellement l'action/abonnement à la nouvelle enveloppe dupliquée. Ne
+  corrompt jamais un calcul, juste une valeur qui repasse à défaut — pas résolu automatiquement.
+- Le revenu reste une valeur "courante" unique (pas par mois) : consulter le budget d'un mois
+  passé/futur utilise quand même le revenu net déclaré aujourd'hui pour calculer les montants.
+- `syncPaydayActionsForEnvelope` (réconciliation `payday_actions` sur `fundedBy`) n'est déclenché
+  que si `period === currentPeriod()` — créer/éditer une enveloppe d'un mois non courant ne touche
+  jamais le Payday Flow. `deleteEnvelope` nettoie `payday_actions` de façon inconditionnelle en
+  revanche (une ligne orpheline pointant vers une enveloppe d'un mois non courant est déjà
+  périmée par construction).
+
+---
+
+## Objectifs (goals) — pots avec suivi de progression
+
+Une enveloppe (racine ou sous-enveloppe) peut avoir un `goal: { target, current }` optionnel,
+saisi à la main (pas de connexion bancaire). `isGoalReached()` (`src/core/waterfall/engine.ts`)
+skip automatiquement une enveloppe dont l'objectif est atteint (`current >= target`) — 0€, ne
+consomme rien du pool, même mécanisme que `enabled: false`, transparent pour les groupes
+`prorata_income` consécutifs. Affiché comme une barre de progression sous la ligne d'enveloppe
+concernée (`EnvelopeTreeRow.tsx`), éditable via une pop-up dédiée ("Mettre à jour le solde", menu
+⋯) qui ne touche jamais `goal.target`. `findEnvelopesWithGoal()` (`src/core/waterfall/tree.ts`)
+retrouve tous les objectifs actifs de l'arbre, tous niveaux confondus — sert à l'onglet Accueil.
+
+---
+
+## Simulation ("et si")
+
+Mode local à l'onglet Budget (bouton "Simulation", mutuellement exclusif avec le réordonnancement)
+qui rejoue `runWaterfall()` sur un revenu et des allocations modifiés à la main, **sans jamais
+toucher aux enveloppes réelles en base** — fermé, tout redevient les vraies valeurs.
+`applyAllocationOverrides()` (`src/core/waterfall/tree.ts`) reconstruit une copie de l'arbre avec
+les overrides ; `SimulationEnvelopeRow.tsx` affiche côte à côte le montant simulé et le delta
+contre le montant réel.
 
 ---
 
@@ -264,6 +354,13 @@ bancaire réelle du virement (ex: "Compte commun Fortuneo"), paramétrable par l
 Paramètres (`src/core/accounts/`). Suppression d'un compte = `on delete set null` côté DB,
 l'action survit et repasse à "Aucun".
 
+**Checklist de virement mensuelle** : chaque action peut être cochée/décochée pour le mois
+courant (table `payday_checks`, modélisée par la présence/absence de la ligne — jamais un
+`update` — voir la policy RLS dans `supabase/migration.sql`). Scope volontairement limité au mois
+en cours (pas d'historique du Payday par mois, voir "Hors scope"). Le rappel local de jour de
+versement (`src/lib/notifications.ts`) énumère les virements encore décochés dans son corps de
+notification.
+
 ---
 
 ## Abonnements (Subscriptions)
@@ -272,8 +369,15 @@ Liste de charges récurrentes (loyer, forfaits, streaming...) avec une fréquenc
 (`weekly | monthly | quarterly | yearly`), normalisées en équivalent mensuel via
 `monthlyCost()` (`src/core/subscriptions/monthlyCost.ts`) pour un total comparable. Chaque
 abonnement est `assignedTo: 'A' | 'B' | 'both'`. Onglet dédié ("Abonnements"), indépendant du
-Waterfall et du Payday Flow — pas (encore) de lien automatique entre un abonnement et une
-enveloppe/action.
+Payday Flow.
+
+**Lien vers une enveloppe** : un abonnement peut être associé à une enveloppe existante
+(`envelopeId`, bolted-on en store — `SubscriptionRow`, jamais dans le type pur `Subscription`,
+même principe que `PaydayActionRow`). Une fois lié, l'écran affiche le % que l'abonnement
+représente du budget de cette enveloppe (`findEnvelopeResult`), et le % combiné si plusieurs
+abonnements pointent vers la même enveloppe — permet de détecter une dérive réelle (ex: des
+abonnements "Plaisir" qui dépassent le budget prévu pour cette enveloppe). Scopé volontairement à
+l'onglet Abonnements uniquement, rien n'est répercuté sur le Waterfall/Payday.
 
 ---
 
@@ -292,16 +396,43 @@ pour la suite envisageable.
 
 ---
 
+## Accueil (tableau de bord)
+
+Premier onglet, agrège en lecture seule des données déjà réelles des autres onglets — épinglé sur
+le vrai mois calendaire courant (`currentPeriod()`), comme Répartition/Abonnements/Historique.
+Trois sections, chacune masquée s'il n'y a rien à montrer :
+
+- **Anneau Payday** (`ProgressRing`, `src/components/ui/ProgressRing.tsx`, SVG via
+  `react-native-svg`) : `paydayChecks` cochés / `paydayActions` total, tap → onglet Répartition.
+- **Tuiles d'objectifs racine** : une tuile par enveloppe *racine* ayant un `goal` actif, avec son
+  % de progression.
+- **Bandeau contextuel** : l'objectif (tous niveaux, via `findEnvelopesWithGoal`) le plus proche
+  d'être atteint parmi ceux pas encore atteints — le % restant à parcourir le plus faible, pas le
+  montant restant le plus faible en valeur absolue.
+
+Aucune donnée propre à Accueil : tout est dérivé de `envelopes`/`paydayActions`/`paydayChecks`
+déjà chargés par le store, rien de nouveau côté Supabase.
+
+---
+
 ## Ce qui est construit aujourd'hui
 
 - Auth + création/rejoint de couple par code d'invitation
+- Accueil : tableau de bord (anneau Payday, tuiles/bandeau d'objectifs)
 - Waterfall complet : enveloppes + sous-enveloppes (2 niveaux), les 4 types d'`Amount`, édition
-  inline (popup €/%), réordonnancement par glisser-déposer, activer/désactiver
+  inline (popup €/%), réordonnancement par glisser-déposer, activer/désactiver, objectifs (goals)
+  avec suivi de progression, mode simulation ("et si")
+- **Waterfall daté** : chaque mois/année a son propre budget indépendant (onglet Budget
+  uniquement), avec copie automatique de la structure du mois antérieur le plus récent
 - Payday Flow complet : actions manuelles ou liées à une enveloppe, priorités, comptes de
-  destination, override ponctuel par mois, rappel local de jour de versement
-- Abonnements avec normalisation mensuelle et filtres par personne
+  destination, override ponctuel par mois, rappel local de jour de versement, checklist de
+  virement mensuelle
+- Abonnements avec normalisation mensuelle, filtres par personne, et lien optionnel vers une
+  enveloppe (% du budget consommé)
 - Comptes de destination paramétrables
 - Historique : clôture manuelle mensuelle + consultation des snapshots passés
+- Paramètres (prénoms, comptes, mises à jour) atteint depuis l'avatar d'Accueil, pas un onglet
+- Système de design "Ardoise + Bleu" (police Inter, accent unique bleu — voir Conventions de code)
 - EAS Update (OTA) pour les changements JS-only, EAS Build pour les dépendances natives
 
 ## Hors scope — Ne pas implémenter sans validation explicite
@@ -310,13 +441,14 @@ pour la suite envisageable.
 - Connexion bancaire / agrégation de comptes réelle (les "Comptes" sont juste des libellés
   choisis par l'utilisateur, pas une intégration bancaire)
 - Historique du Payday Flow (qui a viré quoi où, mois par mois) — volontairement exclu du scope
-  actuel de l'Historique, pourrait être une itération future
+  actuel de l'Historique, pourrait être une itération future ; la checklist de virement
+  (`payday_checks`) ne couvre elle-même que le mois en cours, pas un historique
 - Statistiques/graphiques d'évolution (courbes, comparaisons automatiques) — l'Historique actuel
   est une simple liste consultable, pas un moteur d'analyse
 - Photos de tickets, dépenses ponctuelles récurrentes automatisées
 - Export PDF
-- Objectifs avec suivi de progression (pots/goals) — les types `Condition` vestigiaux y font
-  allusion mais rien n'est câblé
+- Vrai centre de notifications in-app — la cloche d'Accueil et le rappel local de jour de
+  versement sont les 2 seules choses qui s'en approchent aujourd'hui, la cloche reste décorative
 
 ---
 
@@ -333,7 +465,17 @@ pour la suite envisageable.
 - **Nommage** : identifiants en anglais dans le code, tous les libellés UI en français
 - **Icônes** : `lucide-react-native` pour tout le chrome d'interface (boutons, menus, navigation)
   — jamais d'emoji d'interface. Les emojis choisis par l'utilisateur pour ses enveloppes restent
-  intouchés, ce n'est pas du chrome mais du contenu.
+  intouchés, ce n'est pas du chrome mais du contenu — affichés dans un badge carré arrondi teinté
+  (`colors.primaryTint`, 32×32/rayon 9, voir `EnvelopeTreeRow.tsx`/`HistoryEnvelopeRow.tsx`), pas
+  bruts.
+- **Thème** (`src/theme/colors.ts`, `src/theme/typography.ts`) : palette "Ardoise + Bleu" — un
+  **unique accent** (`colors.primary`, bleu) partout, pas de duo de couleurs par personne dans le
+  thème (l'ancien `accentA`/`accentB`/`personGradient` a été retiré). Là où une distinction
+  visuelle entre les 2 personnes reste une vraie UX (ex: `IncomeFormScreen`/`SettingsScreen`), 2
+  constantes de couleur **locales au fichier** sont utilisées, jamais ressuscitées dans le thème
+  global. Police unique **Inter** (pas de police séparée pour les montants) : les clés de
+  `fonts` sont neutres (`regular/medium/semiBold/bold/extraBold`), jamais nommées d'après une
+  famille de police — éviter par exemple un futur `fonts.karlaBold` qui pointerait vers Inter.
 - **Popups** : `Modal` (`transparent`, `animationType="fade"`) est le seul pattern de popup de
   l'app (édition €/%, menu ⋯ d'une ligne). Autofocus d'un `TextInput` dans une `Modal` : ni
   `autoFocus` ni l'event `onShow` ne sont fiables sur Android — utiliser un `ref` +
@@ -363,6 +505,10 @@ pour la suite envisageable.
   puis `grant select, insert, update, delete on X to authenticated` — n'importe quel membre du
   couple gère toutes les lignes de son couple, pas de restriction par utilisateur individuel.
   `auth_couple_id()` est le helper `security definer` qui centralise ça.
+- `envelopes.period` (date, défaut `date_trunc('month', now())`) scope chaque enveloppe à un mois
+  — voir "Le Waterfall daté" plus haut. `payday_checks` modélise l'état coché d'une action pour le
+  mois courant par la présence/absence de la ligne (jamais un `update`), unique par
+  `(couple_id, action_id, period)`.
 - Modifier une donnée qui appartient au/à la **partenaire** (revenu, prénom, jour de versement)
   ne passe jamais par un simple `.update()` — la policy "update own profile" n'autorise que
   `id = auth.uid()`. Ça passe par un RPC dédié `security definer`

@@ -1,4 +1,10 @@
-import { applyAllocationOverrides, flattenEnvelopes, summarizeChildren, type ChildrenSummary } from './tree';
+import {
+  applyAllocationOverrides,
+  findEnvelopesWithGoal,
+  flattenEnvelopes,
+  summarizeChildren,
+  type ChildrenSummary,
+} from './tree';
 import type { Envelope, EnvelopeResult } from './types';
 
 function child(amount: number, requestedAmount: number): EnvelopeResult {
@@ -114,5 +120,53 @@ describe('flattenEnvelopes', () => {
 
   it('renvoie un tableau vide pour un arbre vide', () => {
     expect(flattenEnvelopes([])).toEqual([]);
+  });
+});
+
+describe('findEnvelopesWithGoal', () => {
+  const envelopes: Envelope[] = [
+    {
+      id: 'investissement',
+      label: 'Investissement',
+      emoji: '💰',
+      priority: 1,
+      allocation: { type: 'percent_envelope', pct: 20 },
+      enabled: true,
+      fundedBy: null,
+      goal: null,
+      children: [
+        {
+          id: 'matelas',
+          label: 'Matelas de sécurité',
+          emoji: '🛟',
+          priority: 1,
+          allocation: { type: 'fixed', value: 300 },
+          enabled: true,
+          fundedBy: null,
+          goal: { target: 3000, current: 2460 },
+          children: [],
+        },
+      ],
+    },
+    {
+      id: 'besoins',
+      label: 'Besoins',
+      emoji: '🏠',
+      priority: 2,
+      allocation: { type: 'percent_envelope', pct: 50 },
+      enabled: true,
+      fundedBy: null,
+      goal: { target: 1000, current: 1000 },
+      children: [],
+    },
+  ];
+
+  it('trouve les enveloppes avec objectif à tous les niveaux (racine et sous-enveloppe)', () => {
+    expect(findEnvelopesWithGoal(envelopes).map((e) => e.id)).toEqual(['matelas', 'besoins']);
+  });
+
+  it('renvoie un tableau vide si aucune enveloppe n\'a d\'objectif', () => {
+    const withoutGoals = envelopes.map((e) => ({ ...e, goal: null, children: e.children.map((c) => ({ ...c, goal: null })) }));
+    expect(findEnvelopesWithGoal(withoutGoals)).toEqual([]);
   });
 });
