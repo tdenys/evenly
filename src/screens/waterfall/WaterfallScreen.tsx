@@ -16,7 +16,7 @@ import PeriodNavigatorCard from '@/components/PeriodNavigatorCard';
 import { currentPeriod, formatAmount, formatPct } from '@/lib/format';
 import { errorMessage, notify } from '@/lib/alert';
 import { coupleIncome, coupleLabels } from '@/lib/couple';
-import { colors, ink } from '@/theme/colors';
+import { chartSeries, colors, ink } from '@/theme/colors';
 import { fonts } from '@/theme/typography';
 import SummaryCard from '@/components/ui/SummaryCard';
 
@@ -24,10 +24,6 @@ type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'Waterfall'>,
   NativeStackScreenProps<RootStackParamList>
 >;
-
-// Boucle sur les enveloppes racines actives, dans l'ordre — dégradé de bleus (clair → accent),
-// repris tel quel de la maquette, pas une palette catégorielle par enveloppe.
-const PROPORTION_COLORS = ['#AFC6FB', '#7FA3F7', '#4E7DF3', colors.primary];
 
 export default function WaterfallScreen({ navigation }: Props) {
   const profile = useStore((s) => s.profile);
@@ -94,7 +90,7 @@ export default function WaterfallScreen({ navigation }: Props) {
       .map((e, i) => ({
         id: e.id,
         pct: ((findEnvelopeResult(result.envelopeResults, e.id)?.amount ?? 0) / result.totalIncome) * 100,
-        color: PROPORTION_COLORS[i % PROPORTION_COLORS.length],
+        color: chartSeries[i % chartSeries.length],
       }))
       .filter((s) => s.pct > 0.5);
   }, [envelopes, result]);

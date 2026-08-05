@@ -20,6 +20,11 @@ export function formatPeriodLabel(period: string): string {
   return new Date(period).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
 }
 
+/** Ex: "juil." — abréviation compacte sans année, pour les ticks d'axe d'un graphique. */
+export function formatPeriodShort(period: string): string {
+  return new Date(period).toLocaleDateString('fr-FR', { month: 'short' });
+}
+
 /** Mois calendaire local (pas UTC) sous forme 'YYYY-MM-01' — le format `period` partagé par
  * budget_snapshots et payday_checks. */
 export function currentPeriod(): string {
