@@ -3,12 +3,14 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import { ChevronDown, ChevronRight, Trash2 } from 'lucide-react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useStore } from '@/store/useStore';
+import { buildRootEnvelopeTrend } from '@/core/history/rootEnvelopeTrend';
 import { confirmAction, errorMessage, notify } from '@/lib/alert';
 import { currentPeriod, formatAmount, formatPeriodLabel } from '@/lib/format';
 import { colors, ink } from '@/theme/colors';
 import { fonts } from '@/theme/typography';
 import Button from '@/components/ui/Button';
 import HistoryEnvelopeRow from '@/components/HistoryEnvelopeRow';
+import RootEnvelopeTrendChart from '@/components/RootEnvelopeTrendChart';
 
 export default function HistoryScreen() {
   const history = useStore((s) => s.history);
@@ -32,6 +34,7 @@ export default function HistoryScreen() {
 
   const period = currentPeriod();
   const alreadyClosed = useMemo(() => history.some((h) => h.period === period), [history, period]);
+  const trend = useMemo(() => buildRootEnvelopeTrend(history), [history]);
 
   const handleClose = async () => {
     setClosing(true);
@@ -68,6 +71,8 @@ export default function HistoryScreen() {
         disabled={closing}
         variant={alreadyClosed ? 'outline' : 'primary'}
       />
+
+      <RootEnvelopeTrendChart series={trend} />
 
       {history.length === 0 && !loading && (
         <Text style={styles.empty}>Aucun mois clôturé pour l'instant.</Text>

@@ -19,6 +19,12 @@ export const colors = {
   warning: '#F59E0B', // Montants non alloués
 } as const;
 
+/** Dégradé de bleus clair→accent, pour les visualisations à plusieurs séries (barre de
+ * proportion du Budget, graphique d'évolution de l'Historique) — boucle si plus de séries que
+ * de couleurs, une même série garde toujours la même couleur d'un rendu à l'autre (indexée par
+ * position, pas par identité d'enveloppe). */
+export const chartSeries = ['#AFC6FB', '#7FA3F7', '#4E7DF3', colors.primary] as const;
+
 /** Encre à une opacité donnée (0-1) — pour les opacités ponctuelles qui ne correspondent à
  * aucun token flat (secondary/tertiary/disabled couvrent les rôles de texte les plus courants). */
 export function ink(alpha: number): string {
